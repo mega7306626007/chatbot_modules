@@ -1,0 +1,6 @@
+{
+  "_instructions": "Translation works out of the box via the free MyMemory API (no setup needed, ~1000 words/day). To use LibreTranslate instead (e.g. a self-hosted instance, or your own API key for higher limits), set 'use_libretranslate' to true and fill in 'endpoint'/'api_key'.",
+  "use_libretranslate": false,
+  "endpoint": "https://libretranslate.com/translate",
+  "api_key": ""
+}

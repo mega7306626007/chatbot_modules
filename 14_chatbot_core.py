@@ -1,0 +1,3925 @@
+"""The main ChatBot class (Section 9)
+Auto-split from the original single-file chatbot.py - see main.py for load order.
+"""
+
+# SECTION 9: MAIN CHATBOT CLASS
+# ==============================================================================
+
+class ChatBot:
+    """
+    The central chatbot object. Owns the memory store, logger, date/time
+    engine, storyteller, poem writer, and the intent engine, and wires
+    them all together with a fixed set of pattern -> handler rules.
+    """
+
+    # ---- neural classifier dispatch tables -------------------------------
+    #
+    # Labels here are safe to act on automatically: their handler takes
+    # no parameter extracted from a regex match object, so calling them
+    # with m=None (since the NN doesn't produce a regex match) is safe.
+    # Populated at the bottom of the file, after all handler methods
+    # exist, to avoid forward-reference issues.
+    # Labels that map to a simple trilingual response bank (random.choice)
+    # rather than a handler method - filled in once the response banks
+    # are defined further down the file (see population block near
+    # Section 10). English bank only is used here since the NN's
+    # training examples are English-only.
+    _NN_RESPONSE_BANK_LABELS = {}
+
+    _NN_AUTO_DISPATCH_LABELS = {}
+
+    # Labels NOT safe to auto-dispatch (their handler needs a captured
+    # parameter, e.g. remembering WHAT fact, renaming the bot to WHAT)
+    # instead get a human-readable nudge toward the precise phrasing.
+    _NN_LABEL_PHRASING = {
+        "remember_fact": "tell me a fact to remember, like 'my favorite food is pizza'",
+        "call_yourself": "rename me, like 'call yourself Max'",
+        "days_until_holiday": "ask how many days until a holiday",
+        "days_between_dates": "ask how many days are between two dates",
+        "age_calculator": "ask me to calculate an age from a birth date",
+        "write_acrostic": "ask me to write an acrostic poem",
+        "write_poem_general": "ask me to write a poem",
+        "simple_math": "ask a simple arithmetic question like 'what is 4 + 5'",
+        "word_count_tool": "ask me to count words in some text",
+        "palindrome_check": "ask if a word is a palindrome",
+        "unit_convert": "ask me to convert between units",
+        "prime_check": "ask if a number is prime",
+        "number_to_words_tool": "ask me to spell a number in words",
+        "todo_add": "ask me to add something to your to-do list",
+    }
+
+    def __init__(self):
+        # ONE shared Database (Section 1B) backs everything below that
+        # persists across sessions. On a brand-new database, this also
+        # runs a one-time import from any pre-existing JSON/CSV files
+        # left over from before this version, so upgrading never loses
+        # remembered facts, the to-do list, or classifier corrections.
+        self.db = Database(DATABASE_FILE)
+        self.db.run_one_time_migration()
+
+        self.memory = MemoryStore(self.db)
+        self.logger = ConversationLogger(self.db)
+        self.clock = DateTimeEngine()
+        self.storyteller = StoryTeller()
+        self.poet = PoemWriter()
+        self.fun = FunExtras()
+        self.text_tools = TextTools()
+        self.number_tools = NumberTools()
+        self.hangman = HangmanGame()
+        self.similarity_matcher = SimilarityMatcher()
+        self.notes_clusterer = NotesClusterer()
+        self.nn_intent = NeuralIntentClassifier(NN_TRAINING_FILE, db=self.db)
+        self.sentiment_clf = SentimentClassifier(SENTIMENT_TRAINING_FILE, db=self.db)
+        self.smart_suggestions = SmartSuggestionEngine()
+        # Optional, opt-in LLM hybrid fallback - disabled unless the
+        # user has filled in chatbot_llm_config.json and set
+        # 'enabled': true. See Section 6I for the full design and the
+        # fail-closed guarantee.
+        self.llm = LLMConnector(LLM_CONFIG_FILE)
+        # LLM support infrastructure (Section 6I-EXT..EXT4): caching to
+        # avoid redundant calls, a soft usage/cost budget, a PII
+        # pre-check, and bounded multi-turn context - all optional
+        # layers around LLMConnector, never required for it to work.
+        self.llm_cache = LLMResponseCache()
+        self.llm_usage = LLMUsageTracker(budget_usd=None)
+        self.llm_context = ConversationContextWindow()
+        self.image_analyzer = ImageAnalyzer()
+        self.shape_classifier = ShapeClassifier()
+        # Inverse of shape_classifier: a CNN that GENERATES a shape
+        # image instead of classifying one (Section 12B).
+        self.image_generator = CNNImageGenerator()
+        # New in this revision: a torch contrastive sentence-embedding
+        # search index (Section 6H3), a Keras LSTM mood-trend forecaster
+        # (Section 6H2), and a small set of opt-in/no-key REST API
+        # connectors (Section 13) - all optional/fail-closed, same
+        # philosophy as everything else optional in this file.
+        self.semantic_memory = SemanticMemoryIndex()
+        # Needs self.semantic_memory + self.memory to already exist.
+        self.rag_context = RAGContextBuilder(self.semantic_memory, self.memory)
+        self.mood_forecaster = MoodTrendForecaster()
+        # --- 5 more trained networks (Section 6H4), bringing the total to 10 ---
+        self.urgency_classifier = UrgencyClassifier()
+        self.politeness_classifier = PolitenessClassifier()
+        self.question_type_classifier = QuestionTypeClassifier()
+        self.text_complexity_regressor = TextComplexityRegressor()
+        self.emoji_predictor = EmojiPredictor()
+        self.extractive_summarizer = ExtractiveSummarizer()
+        self.weather_api = WeatherAPIConnector()
+        # Separate from self.image_generator (CNNImageGenerator, fully
+        # offline) on purpose: this one makes a real network call to an
+        # external API, so it's opt-in per-request (see
+        # _pending_real_photo / _resolve_pending_real_photo) rather
+        # than something that happens automatically.
+        self.real_photo_connector = RealPhotoConnector()
+        self._pending_real_photo = None  # (shape, color) awaiting a yes/no about going online
+        self.currency_api = CurrencyExchangeConnector()
+        self.online_trivia_api = OnlineTriviaConnector()
+        self.translation_api = TranslationAPIConnector(TRANSLATION_CONFIG_FILE)
+        self.news_api = NewsHeadlinesConnector()
+        self.dictionary_api = DictionaryAPIConnector()
+        self.qr_generator = QRCodeGenerator
+        self.style_transfer = NeuralStyleTransfer()
+        # Wires the LLM tool-calling demo (Section 13B) to real chatbot
+        # methods, so IF the LLM hybrid is enabled and returns a
+        # structured tool call, it actually does something rather than
+        # just being parsed and discarded.
+        self.tool_call_parser = ToolCallParser()
+        self.tool_call_parser.register("get_weather", lambda place: self.weather_api.format_current_weather(place))
+        self.tool_call_parser.register(
+            "convert_currency",
+            lambda amount, from_currency, to_currency: self.currency_api.format_conversion(
+                float(amount), from_currency, to_currency
+            ),
+        )
+        self.tool_call_parser.register(
+            "get_trivia", lambda difficulty=None: self.online_trivia_api.format_question(difficulty)
+        )
+        self.tool_call_parser.register(
+            "search_memory",
+            lambda query: self.semantic_memory.format_search(
+                query, [f"{k}: {v}" for k, v in self.memory.all_facts().items()]
+            ),
+        )
+        self.tool_call_parser.register("define_word", lambda word: self.dictionary_api.format_definition(word))
+        # A real, classic word-prediction model (Section 14) trained
+        # offline on a casual conversational corpus - see that
+        # section's docstring for what is/isn't embedded and why.
+        self.language_model = ConversationalLanguageModel()
+        # A tiny self-attention transformer (Section 14B) layered on
+        # top of it: "online mode" (torch installed) upgrades word
+        # prediction/continuation to real causally-masked self-attention,
+        # trained via self-distillation on sentences sampled from
+        # self.language_model above; "offline mode" (torch missing)
+        # falls straight back to self.language_model's rule-based
+        # trigram backoff - both paths share the exact same interface,
+        # so the handlers below don't need to know or care which one
+        # answered.
+        self.transformer_lm = TransformerLanguageModel(self.language_model)
+        # Rolling window of recent sentiment labels this session, most-
+        # recent last - the raw material MoodTrendForecaster.forecast()
+        # needs. Capped well above SEQUENCE_LENGTH so old entries just
+        # age out rather than growing unbounded over a long session.
+        self.recent_moods = []
+        # Rule-based conversation-shape memory (Section 6D2) and a
+        # Leitner-system flashcard scheduler over the trivia bank
+        # (Section 6D3) - both genuinely new offline capabilities, no
+        # ML involved in either.
+        self.topic_tracker = TopicContinuityTracker()
+        self.tone_tracker = AdaptiveToneTracker()
+        self.flashcards = LeitnerFlashcards()
+        self.flashcards.load_from_trivia(FunExtras.TRIVIA["en"])
+        # Tracks (user_text, predicted_label) for the most recent message
+        # the neural classifier guessed on, so a follow-up correction
+        # ("no, i meant X") knows exactly what to fix.
+        self.last_nn_prediction = None
+        # Tracks the most recent NON-meta-command user message
+        # (typo-corrected), for the 'compare models' command -
+        # independent of which fallback layer (if any) handled it, and
+        # never overwritten by meta/tooling commands themselves (see
+        # respond()'s META_COMMAND_NAMES check).
+        self.previous_user_message = None
+        self._current_raw_text = None
+        # Tracks the most recent (label, confidence) sentiment reading,
+        # for tone-adapted responses and the 'compare models' command.
+        self.last_sentiment = None
+        self.language_detector = LanguageDetector()
+        self.keyword_matcher = KeywordTopicMatcher()
+        self.typo_corrector = TypoCorrector()
+        # --- New feature modules (added alongside the file split) ---
+        self.rps_game = RockPaperScissorsGame()
+        self.tictactoe_game = TicTacToeGame()
+        self.dice_roller = DiceRoller()
+        self.cipher_tools = CipherTools()
+        self.tip_calculator = TipCalculator()
+        self.name_generator = NameGenerator()
+        self.ascii_art = AsciiArtGenerator()
+        self.markdown_formatter = MarkdownTableFormatter()
+        self.countdowns = CountdownDashboard(self.memory)
+        self.word_scramble = WordScrambleGame(self.typo_corrector._known_words)
+        self.anagram_solver = AnagramSolver(self.typo_corrector._known_words)
+        self.engine = IntentEngine()
+        self.running = True
+        self.last_topic = None
+        self._register_intents()
+
+    # ---- helpers --------------------------------------------------------
+
+    def user_name(self):
+        return self.memory.recall("name")
+
+    def greet_by_name(self, fallback="friend"):
+        name = self.user_name()
+        return name if name else fallback
+
+    def bot_name(self):
+        return self.memory.get_bot_name()
+
+    # ---- intent registration -------------------------------------------
+
+    def _register_intents(self):
+        e = self.engine
+
+        # --- Neural intent classifier: corrections & retraining ---
+        # Registered FIRST, with highest priority. These must win over
+        # any general content-request intent below (e.g. tell_riddle's
+        # pattern \btell me a riddle\b would otherwise also match inside
+        # "no, i meant tell me a riddle", since IntentEngine does
+        # substring search, not just full-string matching).
+        e.register(
+            "correct_intent",
+            [
+                r"^\s*no,?\s+i meant\s+(.+)$",
+                r"^\s*that'?s wrong,?\s+i meant\s+(.+)$",
+                r"^\s*wrong,?\s+i meant\s+(.+)$",
+                r"^\s*i actually meant\s+(.+)$",
+            ],
+            self._handle_correct_intent,
+        )
+        e.register(
+            "retrain_nn",
+            [r"^\s*retrain\s*$", r"^\s*learn now\s*$", r"\bupdate your (model|brain|classifier)\b"],
+            self._handle_retrain_nn,
+        )
+        e.register(
+            "nn_stats",
+            [r"\bnn stats\b", r"\bmodel stats\b", r"\bneural network stats\b",
+             r"\bhow accurate (is|are) your (model|models|neural network)\b"],
+            self._handle_nn_stats,
+        )
+        e.register(
+            "compare_models",
+            [r"\bcompare models\b", r"\bcompare your models\b", r"\bcompare predictions\b"],
+            self._handle_compare_models,
+        )
+        e.register(
+            "llm_status",
+            [r"\bllm status\b", r"\bare you connected to (an? )?llm\b", r"\bis the llm (on|enabled|active)\b"],
+            self._handle_llm_status,
+        )
+        e.register(
+            "llm_clear_history",
+            [r"\bforget our conversation\b", r"\bclear (llm|chat) history\b", r"\bstart a fresh conversation\b"],
+            self._handle_llm_clear_history,
+        )
+        e.register(
+            "db_stats",
+            [r"\bdb stats\b", r"\bdatabase stats\b", r"\bhow much (data|memory) (do you have|is stored)\b"],
+            self._handle_db_stats,
+        )
+        e.register(
+            "change_llm_provider",
+            [
+                r"\b(?:change|switch|use)\s+(?:to\s+)?(gpt|openai|chatgpt)\b",
+                r"\b(?:change|switch|use)\s+(?:to\s+)?(claude|anthropic|sonnet)\b",
+            ],
+            self._handle_change_llm_provider,
+        )
+        e.register(
+            "system_status",
+            [r"\bsystem status\b", r"\bsystem info\b", r"\bcpu (usage|status)\b",
+             r"\b(how('?s| is) (the )?(battery|cpu|ram|memory))\b", r"\bdevice status\b"],
+            self._handle_system_status,
+        )
+        e.register(
+            "analyze_image",
+            [r"\banalyze (?:this )?image[:\s]+(.+)", r"\blook at (?:this )?image[:\s]+(.+)",
+             r"\bwhat'?s in (?:this )?image[:\s]+(.+)", r"\bdescribe (?:this )?image[:\s]+(.+)"],
+            self._handle_analyze_image,
+        )
+        e.register(
+            "classify_shape",
+            [r"\bwhat shape is (?:this|in)[:\s]+(.+)", r"\bclassify (?:this )?shape[:\s]+(.+)",
+             r"\bidentify (?:the )?shape (?:in|of)[:\s]+(.+)"],
+            self._handle_classify_shape,
+        )
+        # --- New feature modules (added alongside the file split) ---
+        # Registered FIRST/highest priority, since a couple of these
+        # (ascii_shape in particular) would otherwise lose to broader
+        # pre-existing patterns like generate_image's catch-all
+        # "draw (an?) WORD WORD" match.
+        e.register("rps_play", [r"\bplay (rock paper scissors|rps)\b.*\b(rock|paper|scissors)\b",
+                                 r"^\s*(rock|paper|scissors)\s*$"], self._handle_rps_play)
+        e.register("rps_score", [r"\brps score\b", r"\brock paper scissors score\b"], self._handle_rps_score)
+
+        e.register("tictactoe_start", [r"\b(play|start) (a game of )?tic[- ]tac[- ]toe\b"], self._handle_tictactoe_start)
+        e.register("tictactoe_play", [r"^\s*play\s+(\d)\s*$", r"^\s*cell\s+(\d)\s*$"], self._handle_tictactoe_play)
+
+        e.register("roll_dice", [r"\broll(?: a| the)?\s+(\d*d\d+(?:\s*[+-]\s*\d+)?(?:\s+(?:dis)?adv(?:antage)?)?)\b",
+                                  r"\bdice roll\s+(\d*d\d+(?:\s*[+-]\s*\d+)?(?:\s+(?:dis)?adv(?:antage)?)?)\b"], self._handle_roll_dice)
+        e.register("flip_coin", [r"\bflip a coin\b", r"\bcoin flip\b", r"\bheads or tails\b"], self._handle_flip_coin)
+
+        e.register("caesar_encode", [r"\bcaesar (?:cipher |encode )?(?:with shift\s*(-?\d+)\s*)?[:\s]+(.+)"],
+                    self._handle_caesar_encode)
+        e.register("rot13", [r"\brot13[:\s]+(.+)"], self._handle_rot13)
+        e.register("to_morse", [r"\b(?:to |convert to )?morse code[:\s]+(.+)", r"\bencode in morse[:\s]+(.+)"],
+                    self._handle_to_morse)
+        e.register("from_morse", [r"\bdecode (?:this )?morse[:\s]+([.\-/\s]+)"], self._handle_from_morse)
+
+        e.register(
+            "tip_calc",
+            [r"\btip (?:on|for)\s+\$?(\d+(?:\.\d+)?)\s*(?:at|,)?\s*(\d+(?:\.\d+)?)\s*%(?:.*?(\d+)\s*people)?"],
+            self._handle_tip_calc,
+        )
+
+        e.register("generate_fantasy_name", [r"\b(?:generate|give me) (?:a )?fantasy name\b"], self._handle_fantasy_name)
+        e.register("generate_username", [r"\b(?:generate|give me) (?:a )?username\b"], self._handle_username)
+        e.register("generate_project_name", [r"\b(?:generate|give me) (?:a )?project name\b"], self._handle_project_name)
+
+        e.register("ascii_banner", [r"\bascii (?:banner|art)(?: for| of)?[:\s]+(.+)", r"\bbanner text[:\s]+(.+)"],
+                    self._handle_ascii_banner)
+        e.register("ascii_shape", [r"\bascii (triangle|square|diamond)(?: of size (\d+))?\b",
+                                    r"\bdraw (?:me )?an? ascii (triangle|square|diamond)(?: of size (\d+))?\b"],
+                    self._handle_ascii_shape)
+
+        e.register("markdown_table", [r"\bmake (?:this |a )?markdown table[:\s]*(?s:(.+))"], self._handle_markdown_table)
+
+        e.register("countdown_add", [r"\bcountdown to\s+(.+?)\s+on\s+(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)\b"],
+                    self._handle_countdown_add)
+        e.register("countdown_remove", [r"\bremove countdown\s+(.+)", r"\bdelete countdown\s+(.+)"],
+                    self._handle_countdown_remove)
+        e.register("countdown_dashboard", [r"\bmy countdowns\b", r"\bshow (?:my )?countdowns\b",
+                                            r"\bcountdown dashboard\b"], self._handle_countdown_dashboard)
+
+        e.register("scramble_start", [r"\bscramble a word\b", r"\bword scramble\b", r"\bplay word scramble\b"],
+                    self._handle_scramble_start)
+        e.register("scramble_guess", [r"^\s*guess\s+([a-zA-Z]+)\s*$"], self._handle_scramble_guess)
+        e.register("scramble_hint", [r"^\s*hint\s*$", r"\bgive me a hint\b"], self._handle_scramble_hint)
+        e.register("scramble_giveup", [r"^\s*give up\s*$"], self._handle_scramble_giveup)
+        e.register("scramble_difficulty", [r"\bscramble difficulty\s+(easy|medium|hard)\b",
+                                            r"\bset scramble difficulty to\s+(easy|medium|hard)\b"],
+                    self._handle_scramble_difficulty)
+        e.register("anagram_phrase", [r"\bphrase anagrams? (?:of|for)\s+([a-zA-Z]+)\b"], self._handle_anagram_phrase)
+        e.register("anagram_find", [r"\banagrams? (?:of|for)\s+([a-zA-Z]+)\b"], self._handle_anagram_find)
+
+        # --- Depth added to earlier feature modules ---
+        e.register("rps_mode", [r"\brps mode\s+(auto|random|smart)\b", r"\bset rps mode to\s+(auto|random|smart)\b"],
+                    self._handle_rps_mode)
+        e.register("tictactoe_difficulty", [r"\btic[- ]tac[- ]toe difficulty\s+(easy|medium|hard)\b",
+                                             r"\bplay tic[- ]tac[- ]toe on\s+(easy|medium|hard)\b"],
+                    self._handle_tictactoe_difficulty)
+        e.register("dice_advantage_help", [r"\bdice advantage\b", r"\bhow does dice advantage work\b"],
+                    self._handle_dice_help)
+
+        e.register("vigenere_encode", [r"\bvigenere encode\s+(.+?)\s+(?:with key|key)\s+(\w+)\b"],
+                    self._handle_vigenere_encode)
+        e.register("vigenere_decode", [r"\bvigenere decode\s+(.+?)\s+(?:with key|key)\s+(\w+)\b"],
+                    self._handle_vigenere_decode)
+        e.register("substitution_encode", [r"\bsubstitution encode\s+(.+?)\s+(?:with key|key)\s+(\w+)\b"],
+                    self._handle_substitution_encode)
+        e.register("substitution_decode", [r"\bsubstitution decode\s+(.+?)\s+(?:with key|key)\s+(\w+)\b"],
+                    self._handle_substitution_decode)
+        e.register("caesar_crack", [r"\bcrack (?:this )?caesar[:\s]+(.+)", r"\bbrute force caesar[:\s]+(.+)"],
+                    self._handle_caesar_crack)
+
+        e.register("tip_itemized", [r"\bsplit (?:the )?bill[:\s]+(.+?)\s+tip\s+(\d+(?:\.\d+)?)\s*%"],
+                    self._handle_tip_itemized)
+
+        e.register("ascii_box", [r"\bascii box[:\s]+(.+)", r"\bput (?:this |it )?in a box[:\s]+(.+)"],
+                    self._handle_ascii_box)
+
+        e.register("countdown_recurring", [
+            r"\bcountdown to\s+(.+?)\s+every\s+(\d+)\s+days?\s+starting\s+(\d{4}-\d{2}-\d{2})\b"],
+            self._handle_countdown_recurring)
+        e.register("countdown_filter", [r"\bmy\s+(\w+)\s+countdowns\b", r"\bcountdowns tagged\s+(\w+)\b"],
+                    self._handle_countdown_filter)
+
+        # --- 5 more trained networks (Section 6H4) ---
+        e.register("check_urgency", [r"\bhow urgent is[:\s]+(.+)", r"\burgency of[:\s]+(.+)",
+                                      r"\bcheck urgency[:\s]+(.+)"], self._handle_check_urgency)
+        e.register("check_politeness", [r"\bhow polite is[:\s]+(.+)", r"\bcheck politeness[:\s]+(.+)",
+                                         r"\bis this polite[:\s]+(.+)"], self._handle_check_politeness)
+        e.register("check_question_type", [r"\bwhat (?:type|kind) of question is[:\s]+(.+)",
+                                            r"\bclassify (?:this )?question[:\s]+(.+)"],
+                    self._handle_check_question_type)
+        e.register("check_complexity", [r"\bhow complex is[:\s]+(.+)", r"\breading complexity of[:\s]+(.+)",
+                                         r"\bcheck complexity[:\s]+(.+)"], self._handle_check_complexity)
+        e.register("check_emoji", [r"\bwhat emoji (?:fits|matches)[:\s]+(.+)", r"\bemoji for[:\s]+(.+)",
+                                    r"\bpredict emoji[:\s]+(.+)"], self._handle_check_emoji)
+
+        e.register(
+            "generate_image",
+            [r"\bgenerate (?:an? )?image of (?:an? )?(\w+) (\w+)\b",
+             r"\bgenerate (?:an? )?(\w+) (\w+) image\b",
+             r"\bdraw (?:me )?(?:an? )?(\w+) (\w+)\b",
+             r"\bcreate (?:an? )?(\w+) (\w+) picture\b"],
+            self._handle_generate_image,
+        )
+        # Deliberately separate from generate_image above: this one
+        # needs to go online (Section 13, RealPhotoConnector), so it
+        # asks for confirmation first rather than firing immediately.
+        e.register(
+            "real_photo_request",
+            [r"\b(?:get|find|fetch) (?:a |an )?(?:real|actual) (?:photo|picture|image) of (?:an? )?(\w+) (\w+)\b",
+             r"\breal (?:photo|picture|image) of (?:an? )?(\w+) (\w+)\b"],
+            self._handle_real_photo_request,
+        )
+        e.register(
+            "image_palette",
+            [r"\b(?:color|colour) palette (?:of|for|in)[:\s]+(.+)",
+             r"\bdominant colors? (?:of|in)[:\s]+(.+)", r"\bwhat colors? (?:are|is) in[:\s]+(.+)"],
+            self._handle_image_palette,
+        )
+        e.register(
+            "image_object_count",
+            [r"\bcount (?:the )?(?:objects|shapes) in[:\s]+(.+)",
+             r"\bhow many (?:objects|shapes) (?:are )?in[:\s]+(.+)"],
+            self._handle_image_object_count,
+        )
+        e.register(
+            "image_contrast",
+            [r"\b(?:check|analyze) contrast (?:of|in|for)[:\s]+(.+)",
+             r"\bcontrast (?:of|in)[:\s]+(.+)"],
+            self._handle_image_contrast,
+        )
+        e.register(
+            "image_object_color",
+            [r"\bwhat colou?r is (?:the )?(?:shape|object|thing) in[:\s]+(.+)",
+             r"\bidentify (?:the )?colou?r (?:of|in)[:\s]+(.+)",
+             r"\bwhat colou?r is (?:that|this)[:\s]+(.+)"],
+            self._handle_image_object_color,
+        )
+        e.register(
+            "generate_qr_code",
+            [r"\b(?:generate|make|create) (?:a |me a )?qr code (?:for|of|with)[:\s]+(.+)",
+             r"\bqr code (?:for|of)[:\s]+(.+)"],
+            self._handle_generate_qr_code,
+        )
+        e.register(
+            "style_transfer",
+            [r"\bstyle transfer[:\s]+(.+?)\s+(?:with|using|and)\s+(.+)",
+             r"\bapply the style of (.+?) to (.+)"],
+            self._handle_style_transfer,
+        )
+        e.register(
+            "weather_lookup",
+            [r"\bweather (?:in|for|at) (.+?)\??$", r"\bwhat'?s the weather (?:like )?in (.+?)\??$",
+             r"\bis it raining in (.+?)\??$", r"\bhow'?s the weather in (.+?)\??$"],
+            self._handle_weather_lookup,
+        )
+        e.register(
+            "weather_forecast",
+            [r"\b(\d+)[- ]day forecast (?:for|in) (.+?)\??$", r"\bforecast (?:for|in) (.+?)\??$"],
+            self._handle_weather_forecast,
+        )
+        e.register(
+            "currency_convert",
+            [r"\bconvert (\d+(?:\.\d+)?) (\w{3}) (?:to|into) (\w{3})\b",
+             r"\bhow much is (\d+(?:\.\d+)?) (\w{3}) in (\w{3})\b",
+             r"(\d+(?:\.\d+)?) (\w{3}) (?:to|in) (\w{3})\b"],
+            self._handle_currency_convert,
+        )
+        e.register(
+            "currency_history",
+            [r"\bwas (\w{3}) stronger against (\w{3}) (\d+) days? ago\b",
+             r"\bhow has (\w{3}) (?:done|changed) against (\w{3}) (?:over|in) the last (\d+) days\b"],
+            self._handle_currency_history,
+        )
+        e.register(
+            "online_trivia",
+            [r"\b(?:fresh|online|new) trivia\b", r"\btrivia from the internet\b",
+             r"\breal trivia question\b"],
+            self._handle_online_trivia,
+        )
+        e.register(
+            "trivia_categories",
+            [r"\btrivia categories\b", r"\bwhat trivia categories (?:are there|do you have)\b"],
+            self._handle_trivia_categories,
+        )
+        e.register(
+            "semantic_search",
+            [r"\bsearch (?:my )?(?:memory|memories|notes|facts) for[:\s]+(.+)",
+             r"\bfind (?:something|anything) (?:i|I) (?:said|told you) about (.+)",
+             r"\bdo (?:i|I) have any (?:notes|memories) about (.+)"],
+            self._handle_semantic_search,
+        )
+        e.register(
+            "mood_forecast",
+            [r"\bmood forecast\b", r"\bhow (?:is|'s) (?:this|our) conversation trending\b",
+             r"\bwhere (?:is|'s) (?:this|my) mood (?:heading|going)\b"],
+            self._handle_mood_forecast,
+        )
+        e.register(
+            "tone_status",
+            [r"\bwhat'?s my (?:tone|register)\b", r"\bam i being (?:formal|casual)\b",
+             r"\btone status\b"],
+            self._handle_tone_status,
+        )
+        e.register(
+            "summarize_conversation",
+            [r"\bsummarize (?:this|our) conversation\b", r"\bwhat have we talked about\b",
+             r"\brecap (?:this|our) conversation\b", r"\bgive me a summary\b"],
+            self._handle_summarize_conversation,
+        )
+        e.register(
+            "llm_usage",
+            [r"\bllm usage\b", r"\bhow much has the llm cost\b", r"\bllm cache stats\b"],
+            self._handle_llm_usage,
+        )
+        e.register(
+            "pii_check",
+            [r"\bcheck for pii[:\s]+(.+)", r"\bdoes this contain (?:any )?personal (?:info|information)[:\s]+(.+)"],
+            self._handle_pii_check,
+        )
+        e.register(
+            "rag_preview",
+            [r"\bwhat would (?:you )?retrieve for[:\s]+(.+)", r"\brag preview[:\s]+(.+)",
+             r"\bwhy would you say that about[:\s]+(.+)"],
+            self._handle_rag_preview,
+        )
+        e.register(
+            "news_headlines",
+            [r"\b(?:top |latest )?news headlines\b", r"\bwhat'?s in the news\b",
+             r"\bshow me (?:the )?news\b"],
+            self._handle_news_headlines,
+        )
+        e.register(
+            "news_by_type",
+            [r"\b(best|new|ask|show) hn\b", r"\b(best|new|ask|show) hacker news\b"],
+            self._handle_news_by_type,
+        )
+        e.register(
+            "find_duplicate_facts",
+            [r"\bfind duplicate (?:facts|memories)\b", r"\bdo i have (?:any )?duplicate (?:facts|memories)\b",
+             r"\bclean up my memory\b"],
+            self._handle_find_duplicate_facts,
+        )
+        e.register(
+            "ml_backends_status",
+            [r"\b(?:ml|machine learning|ai) backends?\b", r"\bwhich (?:backends?|models?) are (?:active|running)\b",
+             r"\bcapabilities (?:report|status)\b"],
+            self._handle_ml_backends_status,
+        )
+        e.register(
+            "run_accuracy_test",
+            [r"\brun (?:the )?accuracy test\b", r"\bhow accurate are you\b", r"\btest your accuracy\b"],
+            self._handle_run_accuracy_test,
+        )
+        e.register(
+            "scan_typo_collisions",
+            [r"\bscan for typo collisions\b", r"\bcheck (?:for )?typo(?:-| )correction bugs\b"],
+            self._handle_scan_typo_collisions,
+        )
+        e.register(
+            "define_word",
+            [r"\bdefine[:\s]+(\w+)\b", r"\bwhat does (\w+) mean\b", r"\bwhat is the definition of (\w+)\b"],
+            self._handle_define_word,
+        )
+        e.register(
+            "image_text_regions",
+            [r"\bdoes[:\s]+(.+?) (?:have|contain) text\b", r"\bdetect text (?:in|regions in)[:\s]+(.+)"],
+            self._handle_image_text_regions,
+        )
+        e.register(
+            "visualize_memory_embeddings",
+            [r"\bvisualize (?:my )?(?:memory )?embeddings\b", r"\bshow (?:me )?(?:my )?embedding space\b"],
+            self._handle_visualize_memory_embeddings,
+        )
+        e.register(
+            "blur_faces",
+            [r"\bblu[re] (?:the )?faces? in[:\s]+(.+)", r"\bredact (?:the )?faces? in[:\s]+(.+)"],
+            self._handle_blur_faces,
+        )
+        e.register(
+            "tool_call_demo",
+            [r"\btool.?call demo\b", r"\bdemo (?:the )?tool.?calling\b", r"\btest tool calling\b"],
+            self._handle_tool_call_demo,
+        )
+        e.register(
+            "predict_next_word",
+            [r"\bpredict (?:the )?next wor[dk](?:s)? (?:after|for)[:\s]+(.+)",
+             r"\bwhat wor[dk] comes next after[:\s]+(.+)"],
+            self._handle_predict_next_word,
+        )
+        e.register(
+            "continue_text",
+            [r"\bcontinue this[:\s]+(.+)", r"\bfinish this sentence[:\s]+(.+)",
+             r"\bwhat would you say next[:\s]*(.*)"],
+            self._handle_continue_text,
+        )
+
+        # Generic topic launcher: "let's talk about X" / "can we talk
+        # about X" / "i want to talk about X" / "talk to me about X" for
+        # ANY topic name, not a fixed list typed into the regex itself.
+        # The actual matching against the 240+ topics in
+        # KeywordTopicMatcher.TOPICS happens in the handler
+        # (_handle_discuss_topic_request) via a curated alias map from
+        # natural words ("date", "anxiety", "money") to the internal
+        # topic keys ("date_query", "anxiety_topic", "money_topic") -
+        # this registration only needs to capture WHAT the user named,
+        # not enumerate every possible topic in the regex itself.
+        e.register(
+            "discuss_topic_request",
+            [
+                r"\blet'?s talk about\s+(.+)",
+                r"\b(?:can|could) we talk about\s+(.+)",
+                r"\bi want to talk about\s+(.+)",
+                r"\bi'?d like to talk about\s+(.+)",
+                r"\btalk to me about\s+(.+)",
+                r"\blet'?s discuss\s+(.+)",
+                r"\bcan we discuss\s+(.+)",
+            ],
+            self._handle_discuss_topic_request,
+        )
+
+        # --- Identity: user telling us their name ---
+        e.register(
+            "tell_name",
+            [
+                r"\bmy name is\s+([a-zA-Z][a-zA-Z\s'-]{0,40})",
+                r"\bi am\s+([a-zA-Z][a-zA-Z\s'-]{0,40})\s*$",
+                r"\bi'm\s+([a-zA-Z][a-zA-Z\s'-]{0,40})\s*$",
+                r"\bcall me\s+([a-zA-Z][a-zA-Z\s'-]{0,40})",
+            ],
+            self._handle_tell_name,
+        )
+
+        # --- Identity: user asking what their name is ---
+        e.register(
+            "ask_my_name",
+            [r"\bwhat('?s| is) my name\b", r"\bdo you (know|remember) my name\b", r"\bwho am i\b"],
+            self._handle_ask_my_name,
+        )
+
+        # Remember a birthday as a STRUCTURED important date (not just a
+        # generic free-text fact) - see MemoryStore.remember_important_date
+        # and the new important_dates database table (Section 1B). This
+        # is what lets the age calculator and "when's my birthday" later
+        # use a real parsed date instead of a string nobody can do date
+        # math on.
+        #
+        # Registered BEFORE age_calculator and remember_fact: a bare "my
+        # birthday is X" (no trailing age question) should be stored as
+        # a remembered date, not answered as an age question or stuffed
+        # into the generic facts table as an unparsed string. Phrasings
+        # that DO end in an explicit age question ("...how old am I")
+        # are matched by age_calculator's own patterns instead, since
+        # those are registered immediately after this block and would
+        # only be reached if THIS block's patterns don't match first -
+        # so this block's patterns are deliberately written to require
+        # NO trailing age-question text, leaving that case to fall
+        # through correctly.
+        e.register(
+            "remember_birthday",
+            [
+                r"^\s*remember (?:that\s+)?my birthday is\s+(.+?)\s*$",
+                r"^\s*my birthday is\s+(.+?)\s*$",
+                r"^\s*remember (?:that\s+)?my birth ?date is\s+(.+?)\s*$",
+                r"^\s*my birth ?date is\s+(.+?)\s*$",
+                # "I was/I'm born on/in X" - anchored to the START of the
+                # message and excluding any trailing age-question text,
+                # so this can't accidentally eat the tail of "how old
+                # would I be if I was born on X" (which age_calculator's
+                # own patterns are meant to handle instead - see the
+                # ordering note above this block).
+                r"^\s*remember (?:that\s+)?(?:i was|i'?m) born (?:on|in)\s+(?!.*\bhow old\b)(.+?)\s*$",
+                r"^\s*(?:i was|i'?m) born (?:on|in)\s+(?!.*\bhow old\b)(.+?)\s*$",
+            ],
+            self._handle_remember_birthday,
+        )
+        e.register(
+            "ask_my_birthday",
+            [r"\bwhen('?s| is) my birthday\b", r"\bdo you (know|remember) my birthday\b",
+             r"\bwhat'?s my birth ?date\b"],
+            self._handle_ask_my_birthday,
+        )
+
+        # Age calculator: accepts many real phrasings of the same
+        # question - "how old would I be if born on X", "I was born on
+        # X, how old am I", "what's my age if born in X", "age for
+        # someone born on X", "if my birthday/birthdate is X how old",
+        # etc. The handler (_handle_age_calculator) just needs the
+        # birth-date text as the LAST captured group, so every pattern
+        # below is written to end with that capture regardless of how
+        # the rest of the sentence is phrased.
+        #
+        # Registered HERE, deliberately BEFORE remember_fact: every
+        # pattern below requires an explicit age-question signal ("how
+        # old", "calculate...age", "what age", "how many years old"),
+        # so none of them can be mistaken for a pure fact-storage
+        # request - but remember_fact's own pattern (\bmy\s+(...)\s+is\s+
+        # (.+)) is broad enough to ALSO match phrasings like "my
+        # birthday is 2000-01-01, how old am I" (capturing "birthday"
+        # as a fact key). Since intent matching is first-match-wins in
+        # registration order, age_calculator must come first or
+        # remember_fact silently steals these requests and stores a
+        # garbled "fact" instead of answering the actual question.
+        e.register(
+            "age_calculator",
+            [
+                # "how old would/will/am I be (if) (I was/I'm) born on/in X"
+                r"\bhow old (?:would i be|am i|will i be|could i be)\s*(?:if\s+)?(?:i was\s+)?(?:i'?m\s+)?born\s+(?:on|in)\s+(.+)",
+                # "calculate my age (if born on/in) X"
+                r"\bcalculate (?:my|the|someone'?s) age\s*(?:if\s+)?(?:born\s+(?:on|in)\s+)?(.*)",
+                # "what's/what is my age if (I was) born on/in X"
+                r"\bwhat'?s? (?:is\s+)?my age\s+(?:if\s+)?(?:i was\s+)?(?:i'?m\s+)?born\s+(?:on|in)\s+(.+)",
+                # "I was born on/in X, how old am I/would I be"
+                r"\bi (?:was\s+)?born\s+(?:on|in)\s+(.+?),?\s*how old (?:am i|would i be|will i be)\b",
+                # "if my birthday/birthdate/dob is X, how old am I"
+                r"\bif my (?:birthday|birth ?date|d\.?o\.?b\.?) is\s+(.+?),?\s*how old (?:am i|would i be)\b",
+                # "my birthday/birthdate/dob is X, how old am I"
+                r"\bmy (?:birthday|birth ?date|d\.?o\.?b\.?) is\s+(.+?),?\s*how old (?:am i|would i be)\b",
+                # "what age would/will someone born on/in X be"
+                r"\bwhat age (?:would|will) (?:i|someone|a person) (?:be\s+)?(?:if\s+)?(?:they'?re |they are |born\s+)?(?:born\s+)?(?:on|in)\s+(.+?)\s+be\b",
+                # "age for/of someone born on/in X"
+                r"\bage (?:for|of) (?:someone|a person)?\s*born\s+(?:on|in)\s+(.+)",
+                # "how many years old would/will someone born on/in X be"
+                r"\bhow many years old (?:would|will|am) (?:i|someone|a person)?\s*(?:be\s+)?(?:if\s+)?(?:born\s+)?(?:on|in)?\s*(.+?)\s+be\b",
+                # bare fallback: "born on/in X how old" in any order, loosely
+                r"\bborn\s+(?:on|in)\s+(.+?),?\s*how old\b",
+                # bare "how old am I" with NO birth date mentioned at all -
+                # only useful if a birthday has been remembered (see
+                # _handle_age_calculator's fallback), but still needs to
+                # be recognized as THIS intent rather than falling
+                # through to the keyword matcher or NN classifier.
+                r"^\s*how old (?:am i|would i be|will i be)\??\s*$",
+            ],
+            self._handle_age_calculator,
+        )
+
+        # --- Generic remember command: "remember that X is Y" ---
+        e.register(
+            "remember_fact",
+            [
+                r"\bremember (that\s+)?my\s+([a-zA-Z0-9_\s]{1,40}?)\s+is\s+(.+)",
+                r"\bremember (that\s+)?i\s+(like|love|enjoy|prefer)\s+(.+)",
+                r"\bmy\s+([a-zA-Z0-9_\s]{1,30}?)\s+is\s+(.+)",
+            ],
+            self._handle_remember_fact,
+        )
+
+        # --- Recall a fact: "what is my X" / "do you remember my X" ---
+        e.register(
+            "recall_fact",
+            [
+                r"\bwhat('?s| is) my\s+([a-zA-Z0-9_\s]{1,40}?)\??\s*$",
+                r"\bdo you (know|remember) my\s+([a-zA-Z0-9_\s]{1,40}?)\??\s*$",
+            ],
+            self._handle_recall_fact,
+        )
+
+        # --- Forget a fact ---
+        e.register(
+            "forget_fact",
+            [r"\bforget my\s+([a-zA-Z0-9_\s]{1,40})", r"\bforget (that\s+)?i\s+(like|love|enjoy|prefer)\s+(.+)"],
+            self._handle_forget_fact,
+        )
+
+        e.register("forget_everything", [r"\bforget everything\b", r"\bforget all\b", r"\bclear (your )?memory\b"], self._handle_forget_everything)
+
+        e.register("list_memory", [r"\bwhat do you (know|remember) about me\b", r"\blist (my )?(facts|memory|memories)\b", r"\bshow (my )?memory\b"], self._handle_list_memory)
+
+        # --- Bot identity ---
+        e.register("call_yourself", [r"\b(call|name) yourself\s+([a-zA-Z][a-zA-Z\s'-]{0,30})", r"\byour name is now\s+([a-zA-Z][a-zA-Z\s'-]{0,30})"], self._handle_rename_bot)
+        e.register("ask_bot_name", [r"\bwhat('?s| is) your name\b", r"\bwho are you\b"], self._handle_ask_bot_name)
+
+        # --- Date / time ---
+        e.register("current_time", [r"\bwhat('?s| is) the time\b", r"\bwhat time is it\b", r"\bcurrent time\b"], self._handle_current_time)
+        e.register("current_date", [r"\bwhat('?s| is) (the )?(today'?s )?date\b(?!.*\bin\s+\d)", r"\bwhat day is (it|today)\b", r"\bwhat('?s| is) today\b(?!.*\bin\s+\d)"], self._handle_current_date)
+        e.register("datetime_full", [r"\bwhat('?s| is) the date and time\b", r"\btell me the date and time\b"], self._handle_datetime_full)
+        e.register("days_until_holiday", [r"\bhow many days (until|till|before)\s+(?!.*\bbetween\b)(.+)", r"\bdays (until|till)\s+(.+)"], self._handle_days_until_holiday)
+
+        # "days between DATE1 and DATE2" - registered before the holiday
+        # and generic weekday intents so it takes priority over them.
+        e.register(
+            "days_between_dates",
+            [r"\bhow many days (between|from)\s+(.+?)\s+(and|to)\s+(.+)", r"\bdays (between|from)\s+(.+?)\s+(and|to)\s+(.+)"],
+            self._handle_days_between_dates,
+        )
+
+        # "what day is N days from <date>" / "date plus/minus N days"
+        e.register(
+            "date_arithmetic",
+            [
+                r"\bwhat (date|day) is\s+(\d+)\s+days?\s+(after|before|from)\s+(.+)",
+                r"(.+?)\s*(\+|plus|minus|-)\s*(\d+)\s+days?\b",
+            ],
+            self._handle_date_arithmetic,
+        )
+
+        e.register("leap_year_check", [r"\bis\s+(\d{4})\s+a leap year\b", r"\bleap year\s+(\d{4})\b"], self._handle_leap_year_check)
+
+        e.register("day_of_week_for_date", [r"\bwhat day (of the week )?(is|was|will)\s+(.+)"], self._handle_day_of_week_for_date)
+
+        # --- Stories ---
+        e.register(
+            "tell_story",
+            [
+                r"\btell me a story\b(.*)",
+                r"\btell a story\b(.*)",
+                r"\btell me an? (adventure|mystery|fantasy|scifi|sci-fi|science fiction) story\b",
+                r"\bstory time\b",
+                r"\bnarrate (a |me a )?story\b",
+            ],
+            self._handle_tell_story,
+        )
+        e.register("list_story_categories", [r"\bwhat (stories|story categories) do you have\b", r"\blist stor(y|ies)\b"], self._handle_list_story_categories)
+
+        # --- Poems ---
+        e.register("write_acrostic", [r"\b(write|make|create) (an? )?acrostic( poem)?\s*(for|about|using)?\s*(.*)"], self._handle_write_acrostic)
+        e.register("write_haiku", [r"\b(write|make|create) (a |an )?haiku\s*(about|on|for)?\s*(.*)"], self._handle_write_haiku)
+        e.register(
+            "write_poem_general",
+            [r"\b(write|make|create) (me )?a poem\s*(about|on|for)?\s*(.*)", r"\bwrite (some )?poetry\b"],
+            self._handle_write_poem_general,
+        )
+
+        # --- Math ---
+        e.register("simple_math", [r"^\s*what('?s| is)\s+(.+?)\??\s*$", r"^\s*calculate\s+(.+)", r"^\s*compute\s+(.+)"], self._handle_simple_math)
+        e.register(
+            "sqrt_tool",
+            [r"\bsquare root of\s+(-?\d+(?:\.\d+)?)\b", r"\bsqrt\(?\s*(-?\d+(?:\.\d+)?)\s*\)?\b"],
+            self._handle_sqrt,
+        )
+        e.register(
+            "power_tool",
+            [r"\b(-?\d+(?:\.\d+)?)\s*\^\s*(-?\d+(?:\.\d+)?)\b",
+             r"\b(-?\d+(?:\.\d+)?)\s+to the power of\s+(-?\d+(?:\.\d+)?)\b"],
+            self._handle_power,
+        )
+        e.register(
+            "log_tool",
+            [r"\blog base\s+(\d+(?:\.\d+)?)\s+of\s+(\d+(?:\.\d+)?)\b",
+             r"\blog(?:arithm)? of\s+(\d+(?:\.\d+)?)\b"],
+            self._handle_log,
+        )
+        e.register(
+            "ln_tool",
+            [r"\bln(?:\(| of)\s*(\d+(?:\.\d+)?)\)?\b", r"\bnatural log of\s+(\d+(?:\.\d+)?)\b"],
+            self._handle_ln,
+        )
+        e.register(
+            "trig_tool",
+            [r"\b(sin|cos|tan)(?:\(| of)\s*(-?\d+(?:\.\d+)?)\)?\s*degrees?\b"],
+            self._handle_trig,
+        )
+        e.register(
+            "percentage_tool",
+            [r"\bwhat is\s+(-?\d+(?:\.\d+)?)\s*%\s*of\s+(-?\d+(?:\.\d+)?)\b",
+             r"\b(-?\d+(?:\.\d+)?)\s*percent of\s+(-?\d+(?:\.\d+)?)\b"],
+            self._handle_percentage,
+        )
+        e.register(
+            "percent_change_tool",
+            [r"\bpercent change from\s+(-?\d+(?:\.\d+)?)\s+to\s+(-?\d+(?:\.\d+)?)\b"],
+            self._handle_percent_change,
+        )
+        e.register(
+            "text_case_convert",
+            [r"\bconvert\s+(.+?)\s+to\s+(snake|kebab|camel|pascal|title|upper|lower)\s*case\b",
+             r"\bmake\s+(.+?)\s+(snake|kebab|camel|pascal|title|upper|lower)\s*case\b"],
+            self._handle_text_case_convert,
+        )
+        e.register(
+            "generate_password",
+            [r"\bgenerate (?:a |me a )?password\b", r"\bmake (?:me )?a (?:new )?password\b",
+             r"\bgenerate (?:a |me a )?passphrase\b"],
+            self._handle_generate_password,
+        )
+        e.register(
+            "hash_text",
+            [r"\b(md5|sha1|sha256|sha512) (?:hash )?(?:of|for)[:\s]+(.+)",
+             r"\bhash[:\s]+(.+)"],
+            self._handle_hash_text,
+        )
+        e.register(
+            "base64_encode",
+            [r"\bbase ?64 encode[:\s]+(.+)", r"\bencode (?:this )?(?:in|to|as) base ?64[:\s]+(.+)"],
+            self._handle_base64_encode,
+        )
+        e.register(
+            "base64_decode",
+            [r"\bbase ?64 decode[:\s]+(.+)", r"\bdecode (?:this )?(?:from )?base ?64[:\s]+(.+)"],
+            self._handle_base64_decode,
+        )
+        e.register(
+            "validate_json",
+            [r"\bvalidate (?:this )?json[:\s]+(.+)", r"\b(?:check|format) (?:this )?json[:\s]+(.+)"],
+            self._handle_validate_json,
+        )
+        e.register(
+            "validate_csv",
+            [r"\bvalidate (?:this )?csv[:\s]+(.+)", r"\bcheck (?:this )?csv[:\s]+(.+)"],
+            self._handle_validate_csv,
+        )
+        e.register(
+            "extract_entities",
+            [r"\bextract entities (?:from)?[:\s]+(.+)", r"\bfind (?:all )?entities in[:\s]+(.+)",
+             r"\bpull out (?:the )?(?:dates|emails|entities) (?:from|in)[:\s]+(.+)"],
+            self._handle_extract_entities,
+        )
+        e.register(
+            "recall_topics",
+            [r"\bwhat (?:have we|were we) (?:talking|discussing) about\b",
+             r"\bgo back to what we were talking about\b",
+             r"\bwhat were we discussing before that\b"],
+            self._handle_recall_topics,
+        )
+        e.register(
+            "flashcards_start",
+            [r"\bstart flashcards\b", r"\bquiz me\b", r"\bflashcard (?:review|quiz)\b"],
+            self._handle_flashcards_start,
+        )
+        e.register(
+            "flashcards_progress",
+            [r"\bflashcard progress\b", r"\bhow am i doing (?:with|on) (?:the |my )?flashcards\b"],
+            self._handle_flashcards_progress,
+        )
+
+        # --- Fun extras: jokes, quotes, riddles, trivia ---
+        e.register("tell_joke", [r"\btell me a joke\b", r"\bsay something funny\b", r"\bmake me laugh\b", r"\bknow any jokes\b"], self._handle_tell_joke)
+        e.register("tell_quote", [r"\btell me a quote\b", r"\bgive me an? (inspirational|inspiring) quote\b", r"\binspire me\b"], self._handle_tell_quote)
+        e.register("tell_riddle", [r"\btell me a riddle\b", r"\bgive me a riddle\b", r"\bask me a riddle\b"], self._handle_tell_riddle)
+        e.register("riddle_answer", [r"\b(reveal|give up on|show me) the riddle answer\b", r"\bi (give up|don'?t know) the riddle\b", r"\bwhat'?s the riddle answer\b"], self._handle_riddle_answer)
+        e.register("tell_trivia", [r"\b(ask me|give me|tell me) (a |some )?trivia\b", r"\btrivia question\b"], self._handle_tell_trivia)
+
+        # --- Text tools ---
+        e.register("word_count_tool", [r"\bcount (the )?words? in[:\s]+(.+)", r"\bhow many words (are )?in[:\s]+(.+)"], self._handle_word_count)
+        e.register("char_count_tool", [r"\bcount (the )?(letters|characters) in[:\s]+(.+)", r"\bhow many (letters|characters) (are )?in[:\s]+(.+)"], self._handle_char_count)
+        e.register("palindrome_check", [r"\bis[:\s]+(.+?)\s+a palindrome\b", r"\bcheck if[:\s]+(.+?)\s+is a palindrome\b"], self._handle_palindrome_check)
+        e.register("reverse_text_tool", [r"\breverse (the )?(text|words?)[:\s]+(.+)", r"\bspell[:\s]+(.+?)\s+backwards\b"], self._handle_reverse_text)
+        e.register("pig_latin_tool", [r"\b(translate|convert|say)[:\s]+(.+?)\s+(in|to|into) pig ?latin\b", r"\bpig ?latin[:\s]+(.+)"], self._handle_pig_latin)
+        e.register("vowel_count_tool", [r"\bcount (the )?vowels? in[:\s]+(.+)", r"\bhow many vowels (are )?in[:\s]+(.+)"], self._handle_vowel_count)
+        e.register("word_frequency_tool", [r"\b(word frequency|most common words?) (of|in|for)[:\s]+(.+)", r"\banalyze (this|the following) text[:\s]+(.+)"], self._handle_word_frequency)
+
+        # --- Number tools ---
+        e.register("prime_check", [r"\bis\s+(-?\d+)\s+(a )?prime\b", r"\bcheck if\s+(-?\d+)\s+is prime\b"], self._handle_prime_check)
+        e.register("factorial_tool", [r"\bfactorial of\s+(\d+)\b", r"\bwhat('?s| is)\s+(\d+)\s*!\s*$", r"\bcalculate\s+(\d+)\s*factorial\b"], self._handle_factorial)
+        e.register("fibonacci_tool", [r"\bfirst\s+(\d+)\s+fibonacci\b", r"\bfibonacci sequence (of|with)?\s*(\d+)\b"], self._handle_fibonacci)
+        e.register("number_to_words_tool", [r"\bspell (out )?(the number\s+)?(-?\d+)\b", r"\b(-?\d+)\s+in words\b"], self._handle_number_to_words)
+        e.register(
+            "unit_convert",
+            [r"\bconvert\s+(-?\d+(?:\.\d+)?)\s+([a-zA-Z]+)\s+(?:to|into)\s+([a-zA-Z]+)\b",
+             r"\b(-?\d+(?:\.\d+)?)\s+([a-zA-Z]+)\s+(?:to|in)\s+([a-zA-Z]+)\b"],
+            self._handle_unit_convert,
+        )
+        e.register("describe_numbers_tool", [r"\b(describe|analyze|stats for) (these |the )?numbers?[:\s]+(.+)"], self._handle_describe_numbers)
+
+        # --- To-do list ---
+        e.register("todo_add", [r"\badd\s+(.+?)\s+to my to-?do list\b", r"\badd to my to-?do list[:\s]+(.+)", r"\bremind me to\s+(.+)"], self._handle_todo_add)
+        e.register("todo_list", [r"\b(show|what'?s on) my to-?do list\b", r"\blist (my )?to-?dos?\b", r"\bwhat do i (still )?need to do\b"], self._handle_todo_list)
+        e.register("todo_complete", [r"\b(mark|complete|finish|check off)\s+(?:item\s+)?(\d+|.+?)\s+(as )?(done|complete)\b", r"\bi (finished|completed|did)\s+(.+)"], self._handle_todo_complete)
+        e.register("todo_remove", [r"\b(remove|delete)\s+(?:item\s+)?(\d+|.+?)\s+from my to-?do list\b"], self._handle_todo_remove)
+        e.register("todo_clear", [r"\bclear (my )?to-?do list\b", r"\bdelete all (my )?to-?dos?\b"], self._handle_todo_clear)
+        e.register("todo_cluster_demo", [r"\bcluster my (to-?do list|notes|tasks)\b", r"\bgroup my (to-?do list|notes|tasks)\b"], self._handle_todo_cluster)
+
+        # --- Hangman mini-game ---
+        e.register("hangman_start", [r"\b(play|start) (a game of )?hangman\b", r"\blet'?s play hangman\b"], self._handle_hangman_start)
+        e.register("hangman_guess_letter", [r"^\s*guess\s+(?:the letter\s+)?([a-zA-Z])\s*$", r"^\s*letter\s+([a-zA-Z])\s*$"], self._handle_hangman_guess_letter)
+        e.register("hangman_guess_word", [r"\bguess the word\s+([a-zA-Z]+)\b", r"\bis the word\s+([a-zA-Z]+)\b"], self._handle_hangman_guess_word)
+        e.register("hangman_quit", [r"\b(quit|stop|end) (the )?(game of )?hangman\b", r"\bgive up on hangman\b"], self._handle_hangman_quit)
+
+        # --- Stats / history ---
+        e.register("session_stats", [r"\b(show|give me) (the )?(session )?stats\b", r"\bconversation stats\b", r"\bhow's? (the|our) conversation going\b"], self._handle_session_stats)
+        e.register("visit_info", [r"\bhow many times have (i|we) (talked|chatted|visited)\b", r"\bhave we met before\b"], self._handle_visit_info)
+
+        # --- Help / meta ---
+        e.register("help", [r"^\s*help\s*$", r"\bwhat can you do\b", r"\bhow do(es)? this work\b", r"\bcommands\b"], self._handle_help)
+
+        # --- Small talk ---
+        e.register("greeting", [r"^\s*(hi|hello|hey|howdy|greetings|yo)\b"], self._handle_greeting)
+        e.register("farewell", [r"^\s*(bye|goodbye|see ya|see you|farewell|exit|quit)\b"], self._handle_farewell)
+        e.register("thanks", [r"\bthank(s| you)\b"], self._handle_thanks)
+        e.register("how_are_you", [r"\bhow are you\b", r"\bhow('?s| is) it going\b", r"\bhow do you feel\b"], self._handle_how_are_you)
+        e.register("compliment", [r"\byou'?re (great|awesome|amazing|smart|cool|helpful|the best)\b", r"\bgood (job|bot)\b", r"\bi like you\b"], self._handle_compliment)
+        e.register("bot_capabilities_joke", [r"\bare you (an? )?(ai|robot|human|real)\b"], self._handle_are_you_ai)
+
+    # ----------------------------------------------------------------------
+    # INTENT HANDLERS
+    # ----------------------------------------------------------------------
+
+    # Common words that "i am X" / "i'm X" patterns might accidentally
+    # capture even though they're not names at all (feelings, states,
+    # filler words). If the captured text is exactly one of these, we
+    # treat it as NOT a name declaration rather than storing it.
+    NON_NAME_WORDS = {
+        "sad", "happy", "tired", "exhausted", "sleepy", "hungry", "thirsty",
+        "fine", "good", "bad", "okay", "ok", "great", "terrible", "awful",
+        "sick", "ill", "well", "not", "so", "very", "really", "feeling",
+        "feeling sad", "feeling happy", "feeling tired", "feeling down",
+        "feeling great", "feeling good", "feeling bad", "feeling well",
+        "excited", "bored", "confused", "lost", "stressed", "anxious",
+        "worried", "scared", "afraid", "angry", "mad", "upset", "lonely",
+        "busy", "free", "ready", "done", "finished", "here", "back",
+        "sorry", "glad", "thankful", "grateful", "curious", "interested",
+        "old", "young", "new", "different", "the same", "joking", "kidding",
+        "just", "only", "still", "already", "again", "going", "leaving",
+        "online", "offline", "available", "unavailable", "busy today",
+        "trying", "jealous", "nervous", "proud", "relieved", "annoyed",
+        "frustrated", "thinking", "wondering", "hoping", "guessing",
+        "learning", "studying", "working", "playing", "cooking", "reading",
+        "watching", "listening", "looking", "waiting", "planning",
+        "struggling", "kidding around", "messing around", "disappointed",
+        "overwhelmed", "embarrassed", "ashamed", "guilty", "hopeful",
+        "optimistic", "pessimistic", "motivated", "unmotivated",
+        "pregnant", "expecting", "getting", "graduating", "moving",
+        "relocating", "retiring", "celebrating", "grieving", "healing",
+        "recovering", "adjusting", "settling", "starting", "finishing",
+        "quitting", "resigning", "traveling", "exercising", "dieting",
+    }
+
+    # Articles ("a", "an", "the") can never legitimately start a name
+    # ("I'm a teacher", "I'm an engineer") - if the captured text starts
+    # with one, this is always a description, never a name declaration.
+    ARTICLES = {"a", "an", "the"}
+
+    # Words that, if they appear as the SECOND token of a captured "name",
+    # strongly suggest this is a verb phrase ("trying to learn", "going
+    # to bed") rather than an actual name, even if the first word alone
+    # isn't in NON_NAME_WORDS. This catches gerund/verb-ing patterns
+    # generically instead of needing to list every possible verb.
+    NAME_CONTINUATION_MARKERS = {"to", "about", "of", "for", "that", "right", "with", "my", "the", "it"}
+
+    def _handle_tell_name(self, text, m):
+        raw_name = m.group(1).strip().rstrip(".!?")
+        tokens = raw_name.lower().split()
+        first_word = tokens[0] if tokens else ""
+
+        # Guard 0: "I'm a teacher", "I'm an engineer", "I'm a night owl" -
+        # any captured text starting with an article is a description,
+        # never a name. This must be checked before anything else since
+        # the word right after the article (e.g. "night" in "a night owl")
+        # wouldn't otherwise be caught by the other guards.
+        if first_word in self.ARTICLES:
+            return None
+
+        # Guard 1: if the captured text STARTS WITH a common non-name word
+        # (e.g. "feeling sad", "trying to learn python"), this isn't
+        # actually a name declaration. Checking just the first word/token
+        # (rather than requiring an exact full-phrase match) catches cases
+        # like "i'm feeling really sad today" where the regex captures the
+        # whole tail of the sentence, not just a short phrase.
+        if first_word in self.NON_NAME_WORDS or raw_name.lower() in self.NON_NAME_WORDS:
+            return None
+
+        # Guard 2: a first word ending in "-ing" ("running", "trying",
+        # "learning", "working") is almost always a present participle
+        # describing an action or state ("I'm running late", "I'm trying
+        # to learn"), not a name. Real names essentially never take this
+        # form in casual self-introduction, so we reject unconditionally
+        # rather than only checking for a following continuation marker -
+        # that narrower check missed cases like "running late" where the
+        # very next word ("late") isn't itself a recognized marker.
+        if first_word.endswith("ing"):
+            return None
+        if len(tokens) > 1 and tokens[1] in self.NAME_CONTINUATION_MARKERS:
+            return None
+
+        name = raw_name.title()
+        # Guard against accidentally capturing trailing words from
+        # sentences like "i am happy today" - keep only first two tokens.
+        name_tokens = name.split()
+        if len(name_tokens) > 3:
+            name = " ".join(name_tokens[:1])
+        self.memory.remember("name", name)
+        return f"Nice to meet you, {name}! I'll remember that."
+
+    def _handle_ask_my_name(self, text, m):
+        name = self.user_name()
+        if name:
+            return f"You told me your name is {name}!"
+        return "I don't think you've told me your name yet. You can say 'my name is ...' and I'll remember it."
+
+    def _handle_remember_fact(self, text, m):
+        groups = [g for g in m.groups() if g]
+        if len(groups) >= 2:
+            # Pattern: "remember that my X is Y" -> groups like (maybe 'that ', key, value)
+            if "like" in text.lower() or "love" in text.lower() or "enjoy" in text.lower() or "prefer" in text.lower():
+                verb_match = re.search(r"\b(like|love|enjoy|prefer)\s+(.+)", text, re.IGNORECASE)
+                if verb_match:
+                    key = "likes"
+                    value = verb_match.group(2).strip().rstrip(".!?")
+                    existing = self.memory.recall(key)
+                    if existing:
+                        value = f"{existing}, {value}"
+                    self.memory.remember(key, value)
+                    return f"Got it - I'll remember that you {verb_match.group(1)} {verb_match.group(2).strip().rstrip('.!?')}."
+            key = groups[-2].strip()
+            value = groups[-1].strip().rstrip(".!?")
+            self.memory.remember(key, value)
+            return f"Okay, I'll remember that your {key.strip()} is {value}."
+        return None
+
+    def _handle_recall_fact(self, text, m):
+        groups = [g for g in m.groups() if g]
+        key = groups[-1].strip()
+        value = self.memory.recall(key)
+        if value:
+            return f"Your {key} is {value}, if I remember correctly!"
+        return f"I don't think you've told me your {key} yet. You can say 'my {key} is ...'."
+
+    def _handle_forget_fact(self, text, m):
+        if "like" in text.lower() or "love" in text.lower() or "enjoy" in text.lower() or "prefer" in text.lower():
+            if self.memory.forget("likes"):
+                return "Okay, I've forgotten what you told me you liked."
+            return "I didn't have anything stored about what you like."
+        key = m.group(1).strip()
+        if self.memory.forget(key):
+            return f"Okay, I've forgotten your {key}."
+        return f"I didn't have anything stored for your {key}."
+
+    def _handle_forget_everything(self, text, m):
+        self.memory.forget_all()
+        return "Done - I've cleared everything I remembered about you."
+
+    def _handle_list_memory(self, text, m):
+        facts = self.memory.all_facts()
+        if not facts:
+            return "I don't have any facts stored about you yet. Tell me things like 'my name is ...' or 'my favorite color is ...'."
+        lines = ["Here's everything I remember about you:"]
+        for key, value in facts.items():
+            pretty_key = key.replace("_", " ")
+            lines.append(f"  - {pretty_key}: {value}")
+        return "\n".join(lines)
+
+    def _handle_rename_bot(self, text, m):
+        groups = [g for g in m.groups() if g]
+        new_name = groups[-1].strip().rstrip(".!?").title()
+        self.memory.set_bot_name(new_name)
+        return f"Alright, you can call me {new_name} from now on!"
+
+    def _handle_ask_bot_name(self, text, m):
+        return f"I'm {self.bot_name()}, your offline rule-based chat companion."
+
+    def _handle_current_time(self, text, m):
+        return f"It's currently {self.clock.current_time_str()}."
+
+    def _handle_current_date(self, text, m):
+        return f"Today is {self.clock.current_date_str()}."
+
+    def _handle_datetime_full(self, text, m):
+        return self.clock.full_datetime_str() + "."
+
+    def _handle_days_until_holiday(self, text, m):
+        holiday_text = m.group(m.lastindex).strip().rstrip(".!?")
+        result = self.clock.days_until_holiday(holiday_text)
+        if result is None:
+            known = ", ".join(sorted(set(self.clock.HOLIDAYS.keys())))
+            return f"I don't have '{holiday_text}' in my holiday table. I know about: {known}."
+        days, when = result
+        if days == 0:
+            return f"{holiday_text.title()} is today!"
+        return f"There are {days} day{'s' if days != 1 else ''} until {holiday_text.title()} ({when.strftime('%B %d, %Y')})."
+
+    def _handle_day_of_week_for_date(self, text, m):
+        date_text = m.group(m.lastindex).strip().rstrip(".!?")
+        # Use the unified resolver so relative phrases work too - this is
+        # the fix for "what day is tomorrow" / "what day is next friday"
+        # previously failing to parse.
+        parsed = self.clock.resolve_date_phrase(date_text)
+        if parsed is None:
+            return ("I couldn't figure out that date. Try something like "
+                    "'tomorrow', 'next friday', '2026-12-25', '12/25/2026', "
+                    "or 'December 25 2026'.")
+        weekday = self.clock.day_of_week_for(parsed)
+        return f"{parsed.strftime('%B %d, %Y')} falls on a {weekday}."
+
+    def _handle_days_between_dates(self, text, m):
+        """
+        Fixes the previously unsupported 'how many days between X and Y'
+        query. Both X and Y can be relative ('today', 'next friday') or
+        absolute ('2026-12-25') date phrases.
+        """
+        groups = m.groups()
+        # Pattern groups: (between|from), date1_text, (and|to), date2_text
+        date1_text = groups[1].strip().rstrip(".!?")
+        date2_text = groups[3].strip().rstrip(".!?")
+
+        date1 = self.clock.resolve_date_phrase(date1_text)
+        date2 = self.clock.resolve_date_phrase(date2_text)
+
+        if date1 is None or date2 is None:
+            missing = []
+            if date1 is None:
+                missing.append(f"'{date1_text}'")
+            if date2 is None:
+                missing.append(f"'{date2_text}'")
+            return (f"I couldn't parse {' and '.join(missing)}. Try relative "
+                    f"phrases like 'today' or 'next friday', or absolute "
+                    f"dates like '2026-12-25'.")
+
+        days = self.clock.days_between_dates(date1, date2)
+        return (f"There are {days} day{'s' if days != 1 else ''} between "
+                f"{date1.strftime('%B %d, %Y')} and {date2.strftime('%B %d, %Y')}.")
+
+    def _handle_date_arithmetic(self, text, m):
+        """
+        Fixes 'N days from now' / 'date + N days' / 'date - N days' style
+        questions, which previously fell through to the unknown-response
+        catch-all because no handler understood date arithmetic.
+        """
+        groups = m.groups()
+
+        # Pattern 1: "what date/day is N days after/before/from <date>"
+        if len(groups) == 4 and groups[2] in ("after", "before", "from"):
+            num_days = int(groups[1])
+            direction = groups[2]
+            base_text = groups[3].strip().rstrip(".!?")
+            base_date = self.clock.resolve_date_phrase(base_text)
+            if base_date is None:
+                return f"I couldn't parse the date '{base_text}'."
+            if direction == "before":
+                result_date = self.clock.subtract_days(base_date, num_days)
+            else:
+                result_date = self.clock.add_days(base_date, num_days)
+            weekday = self.clock.day_of_week_for(result_date)
+            return (f"{num_days} day{'s' if num_days != 1 else ''} {direction} "
+                    f"{base_date.strftime('%B %d, %Y')} is {result_date.strftime('%B %d, %Y')} "
+                    f"({weekday}).")
+
+        # Pattern 2: "<date or 'now'> + N days" / "<date> - N days"
+        base_text = groups[0].strip().rstrip(".!? ")
+        operator = groups[1].strip().lower()
+        num_days = int(groups[2])
+
+        if base_text.lower() in ("now", "today", ""):
+            base_date = self.clock.now().date()
+        else:
+            base_date = self.clock.resolve_date_phrase(base_text)
+
+        if base_date is None:
+            return None  # let other intents (e.g. simple_math) have a try
+
+        if operator in ("-", "minus"):
+            result_date = self.clock.subtract_days(base_date, num_days)
+        else:
+            result_date = self.clock.add_days(base_date, num_days)
+
+        weekday = self.clock.day_of_week_for(result_date)
+        return f"That would be {result_date.strftime('%B %d, %Y')} ({weekday})."
+
+    def _handle_remember_birthday(self, text, m):
+        """
+        Stores the user's birthday as a STRUCTURED important date (see
+        MemoryStore.remember_important_date / the important_dates
+        database table) rather than a generic free-text fact - this is
+        what lets the age calculator and 'when's my birthday' actually
+        do real date math on it later, instead of just echoing back a
+        string nobody can compute with.
+        """
+        date_text = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not date_text:
+            return ("Tell me your birthday and I'll remember it - for example, "
+                     "'my birthday is 2000-01-01'.")
+
+        birth_date = self.clock.resolve_date_phrase(date_text)
+        if birth_date is None:
+            return (f"I couldn't parse '{date_text}' as a date. Try a format "
+                     f"like '2000-01-01', '1/1/2000', or 'January 1 2000'.")
+
+        today = self.clock.now().date()
+        if birth_date > today:
+            return "That date is in the future - double check it, or I'll remember it as-is if you confirm."
+
+        self.memory.remember_important_date("birthday", birth_date)
+
+        year_only = bool(re.fullmatch(r"\s*(19|20)\d{2}\s*", date_text))
+        year_note = (
+            " (I assumed January 1st since you only gave a year - tell me the "
+            "exact day if you want a precise birthday countdown)"
+            if year_only else ""
+        )
+        return (f"Got it - I'll remember your birthday as {birth_date.strftime('%B %d, %Y')}"
+                 f"{year_note}. Ask me 'when's my birthday' or 'how old am I' anytime.")
+
+    def _handle_ask_my_birthday(self, text, m):
+        """Recalls the stored birthday (see remember_important_date)
+        and reports both the date and a live countdown to the next
+        occurrence, using the same date math as the holiday countdown."""
+        birthday = self.memory.recall_important_date("birthday")
+        if birthday is None:
+            return ("I don't have your birthday saved yet - tell me with "
+                     "'my birthday is 2000-01-01' and I'll remember it.")
+
+        today = self.clock.now().date()
+        days_to_next = self.clock.days_until_next_birthday(birthday, today)
+
+        with_year = self.memory.recall_important_date_with_year("birthday")
+        if with_year is not None:
+            age_note = f" You'd be turning {self.clock.calculate_age(with_year, today) + (1 if days_to_next > 0 else 0)}."
+        else:
+            age_note = ""
+
+        return (f"Your birthday is {birthday.strftime('%B %d')}, with {days_to_next} day"
+                 f"{'s' if days_to_next != 1 else ''} until the next one.{age_note}")
+
+    def _handle_age_calculator(self, text, m):
+        """
+        Handles 'how old would I be if born on X' in its many phrasings
+        (see the age_calculator registration above). If the message
+        doesn't actually contain a date (e.g. just "how old am I"), and
+        a birthday has been remembered (see remember_important_date),
+        falls back to using that automatically rather than asking the
+        user to repeat information they already gave once.
+        """
+        groups = [g for g in m.groups() if g]
+        date_text = groups[-1].strip().rstrip(".!?") if groups else ""
+
+        if not date_text:
+            remembered = self.memory.recall_important_date_with_year("birthday")
+            if remembered is not None:
+                return self._age_from_birth_date(remembered, date_text="(your remembered birthday)")
+            return ("Tell me a birth date and I'll calculate the age - for "
+                    "example, 'how old would I be if born on 2000-01-01'. "
+                    "Or save it once with 'my birthday is 2000-01-01' and "
+                    "just ask 'how old am I' from then on.")
+
+        birth_date = self.clock.resolve_date_phrase(date_text)
+        if birth_date is None:
+            return (f"I couldn't parse '{date_text}' as a date. Try a format "
+                     f"like '2000-01-01', '1/1/2000', or 'January 1 2000'.")
+
+        return self._age_from_birth_date(birth_date, date_text)
+
+    def _age_from_birth_date(self, birth_date, date_text):
+        """Shared age/countdown computation, used both for an explicit
+        birth date in the message and for a remembered birthday."""
+        today = self.clock.now().date()
+        if birth_date > today:
+            return "That date is in the future, so the age would be negative - try a past date."
+
+        age = self.clock.calculate_age(birth_date, today)
+        days_to_next = self.clock.days_until_next_birthday(birth_date, today)
+
+        year_only = bool(re.fullmatch(r"\s*(19|20)\d{2}\s*", date_text or ""))
+        year_note = (
+            " (you only gave a year, so I assumed January 1st - the exact "
+            "age could be off by up to a year depending on the real birth date)"
+            if year_only else ""
+        )
+
+        return (f"Someone born on {birth_date.strftime('%B %d, %Y')}{year_note} would be "
+                f"{age} years old today, with {days_to_next} day"
+                f"{'s' if days_to_next != 1 else ''} until their next birthday.")
+
+    def _handle_leap_year_check(self, text, m):
+        year = int(m.group(1))
+        is_leap = self.clock.is_leap_year(year)
+        if is_leap:
+            return f"Yes, {year} is a leap year - it has 366 days, including February 29th."
+        return f"No, {year} is not a leap year - it has 365 days."
+
+    def _handle_tell_story(self, text, m):
+        lang = self.language_detector.detect(text)
+        category = None
+        text_lower = text.lower()
+        for cat in self.storyteller.categories():
+            if cat in text_lower:
+                category = cat
+                break
+        if "sci-fi" in text_lower or "science fiction" in text_lower:
+            category = "scifi"
+
+        result = self.storyteller.random_story(category=category, user_name=self.user_name(), lang=lang)
+        if result is None:
+            return "I don't have any stories in that category yet."
+        title, body = result
+        wrapped = "\n".join(textwrap.wrap(body, width=78, replace_whitespace=False) if False else body.split("\n"))
+        return f"📖 {title}\n\n{body}"
+
+    def _handle_list_story_categories(self, text, m):
+        cats = ", ".join(self.storyteller.categories())
+        return f"I have stories in these categories: {cats}. Try 'tell me a fantasy story'."
+
+    def _handle_write_acrostic(self, text, m):
+        lang = self.language_detector.detect(text)
+        target = m.group(5).strip().rstrip("?.! ") if m.group(5) else ""
+        if not target:
+            target = self.user_name() or "HELLO"
+        poem = self.poet.acrostic(target, lang=lang)
+        return f"Here's an acrostic for '{target.upper()}':\n\n{poem}"
+
+    def _handle_write_haiku(self, text, m):
+        lang = self.language_detector.detect(text)
+        topic = m.group(4).strip().rstrip("?.! ") if m.group(4) else ""
+        topic = topic or None
+        poem = self.poet.haiku(topic, lang=lang)
+        label = f" about {topic}" if topic else ""
+        return f"Here's a haiku{label}:\n\n{poem}"
+
+    def _handle_write_poem_general(self, text, m):
+        lang = self.language_detector.detect(text)
+        topic = ""
+        if m.lastindex and m.lastindex >= 4:
+            raw = m.group(4)
+            topic = raw.strip().rstrip("?.! ") if raw else ""
+        topic = topic or "general"
+        theme_words = self.poet.THEME_WORDS.get(lang, self.poet.THEME_WORDS["en"])
+        topic_key = topic.lower() if topic.lower() in theme_words else "general"
+        poem = self.poet.rhyming_couplets(theme=topic_key, num_couplets=2, lang=lang)
+        label = f" about {topic}" if topic and topic_key != "general" else ""
+        return f"Here's a poem{label}:\n\n{poem}"
+
+    def _handle_simple_math(self, text, m):
+        """
+        Extremely rigid arithmetic handler: only recognizes patterns like
+        'what is 4 + 5', '12 * 3', '100 / 4', '7 - 2', using plain Python
+        arithmetic - no eval() of arbitrary text, no symbolic math.
+        """
+        expr_candidate = m.group(m.lastindex) if m.lastindex else text
+        expr_candidate = expr_candidate.strip().rstrip("?.! ")
+
+        match = re.match(
+            r"^\s*(-?\d+(?:\.\d+)?)\s*([+\-*/x×])\s*(-?\d+(?:\.\d+)?)\s*$",
+            expr_candidate,
+        )
+        if not match:
+            return None  # not a math question - let other intents try
+
+        num1 = float(match.group(1))
+        op = match.group(2)
+        num2 = float(match.group(3))
+
+        try:
+            if op == "+":
+                result = num1 + num2
+            elif op == "-":
+                result = num1 - num2
+            elif op in ("*", "x", "×"):
+                result = num1 * num2
+            elif op == "/":
+                if num2 == 0:
+                    return "I can't divide by zero - that one breaks even rigid little bots like me."
+                result = num1 / num2
+            else:
+                return None
+        except (ValueError, ZeroDivisionError):
+            return "Something went wrong with that calculation."
+
+        if result == int(result):
+            result = int(result)
+        return f"{match.group(1)} {op} {match.group(3)} = {result}"
+
+    # ---- scientific calculator handlers (Section 3B) -----------------------
+
+    def _handle_sqrt(self, text, m):
+        value = float(m.group(1))
+        result = ScientificCalculator.sqrt(value)
+        if result is None:
+            return "I don't handle square roots of negative numbers (no complex-number support)."
+        return f"The square root of {value:g} is approximately {result:.6g}."
+
+    def _handle_power(self, text, m):
+        base = float(m.group(1))
+        exponent = float(m.group(2))
+        result = ScientificCalculator.power(base, exponent)
+        if result is None:
+            return "That power calculation overflowed - try a smaller exponent."
+        return f"{base:g} ^ {exponent:g} = {result:.6g}"
+
+    def _handle_log(self, text, m):
+        if m.lastindex == 2:
+            base = float(m.group(1))
+            value = float(m.group(2))
+        else:
+            base = 10.0
+            value = float(m.group(1))
+        result = ScientificCalculator.log(value, base)
+        if result is None:
+            return "Logarithms are only defined for positive numbers."
+        return f"log base {base:g} of {value:g} is approximately {result:.6g}."
+
+    def _handle_ln(self, text, m):
+        value = float(m.group(1))
+        result = ScientificCalculator.ln(value)
+        if result is None:
+            return "The natural log is only defined for positive numbers."
+        return f"ln({value:g}) is approximately {result:.6g}."
+
+    def _handle_trig(self, text, m):
+        func_name = m.group(1).lower()
+        degrees = float(m.group(2))
+        func = {"sin": ScientificCalculator.sin_degrees, "cos": ScientificCalculator.cos_degrees,
+                "tan": ScientificCalculator.tan_degrees}[func_name]
+        result = func(degrees)
+        return f"{func_name}({degrees:g}°) is approximately {result:.6g}."
+
+    def _handle_percentage(self, text, m):
+        percent = float(m.group(1))
+        whole = float(m.group(2))
+        result = ScientificCalculator.percentage_of(percent, whole)
+        return f"{percent:g}% of {whole:g} is {result:.6g}."
+
+    def _handle_percent_change(self, text, m):
+        old_value = float(m.group(1))
+        new_value = float(m.group(2))
+        result = ScientificCalculator.percent_change(old_value, new_value)
+        if result is None:
+            return "Percent change from zero is undefined."
+        direction = "an increase" if result >= 0 else "a decrease"
+        return f"That's {direction} of {abs(result):.2f}% (from {old_value:g} to {new_value:g})."
+
+    # ---- text case converter + password generator handlers (Section 3C/3D) -
+
+    def _handle_text_case_convert(self, text, m):
+        target_text = m.group(1).strip().strip("'\"")
+        target_case = m.group(2).lower()
+        result = TextCaseConverter.convert(target_text, target_case)
+        if result is None:
+            return f"I don't know the case style '{target_case}'."
+        return f"{result}"
+
+    def _handle_generate_password(self, text, m):
+        text_lower = text.lower()
+        if "passphrase" in text_lower:
+            passphrase = PasswordGenerator.generate_passphrase()
+            return f"Here's a passphrase: {passphrase}\n(Easier to remember than random symbols, still strong if long enough.)"
+        password = PasswordGenerator.generate(length=16)
+        entropy = PasswordGenerator.estimate_entropy_bits(16, 70)
+        return (f"Here's a password: {password}\n"
+                f"(~{entropy:.0f} bits of entropy - generated with Python's `secrets` "
+                f"module, not `random`, since this one actually matters.)")
+
+    # ---- hash / base64 / data-format / entity-extraction handlers ---------
+
+    def _handle_hash_text(self, text, m):
+        if m.lastindex and m.lastindex >= 2:
+            algorithm = m.group(1).lower()
+            target = m.group(2).strip()
+        else:
+            algorithm = "sha256"
+            target = m.group(1).strip() if m.group(1) else ""
+        if not target:
+            return "What text should I hash?"
+        return HashCalculator.format_hash(target, algorithm)
+
+    def _handle_base64_encode(self, text, m):
+        target = m.group(1).strip() if m.group(1) else ""
+        if not target:
+            return "What text should I base64-encode?"
+        return Base64Tool.format_encode(target)
+
+    def _handle_base64_decode(self, text, m):
+        target = m.group(1).strip() if m.group(1) else ""
+        if not target:
+            return "What base64 text should I decode?"
+        return Base64Tool.format_decode(target)
+
+    def _handle_validate_json(self, text, m):
+        target = m.group(1).strip() if m.group(1) else ""
+        if not target:
+            return "Give me some JSON to validate."
+        return DataFormatTool.format_json_check(target)
+
+    def _handle_validate_csv(self, text, m):
+        target = m.group(1).strip() if m.group(1) else ""
+        if not target:
+            return "Give me some CSV to validate."
+        return DataFormatTool.format_csv_check(target)
+
+    def _handle_extract_entities(self, text, m):
+        target = m.group(1).strip() if m.group(1) else ""
+        if not target:
+            return "Give me some text to pull entities from."
+        return SimpleEntityExtractor.format_extraction(target)
+
+    # ---- topic continuity + flashcards handlers (Section 6D2/6D3) ---------
+
+    def _handle_recall_topics(self, text, m):
+        """Reports recent topic history (TopicContinuityTracker,
+        Section 6D2) - simple rolling bookkeeping, not a learned model
+        of the conversation."""
+        previous = self.topic_tracker.previous_topic()
+        if previous:
+            readable = previous.replace("_", " ")
+            return f"Before this, we were talking about {readable}. " + self.topic_tracker.format_recent_topics()
+        return self.topic_tracker.format_recent_topics()
+
+    def _handle_flashcards_start(self, text, m):
+        """Starts (or continues) a Leitner-system flashcard review
+        (Section 6D3) over the offline trivia bank."""
+        self.flashcards.advance_session()
+        item = self.flashcards.next_card()
+        if item is None:
+            return "No flashcards are due for review right now - nicely caught up!"
+        letters = ["A", "B", "C", "D"]
+        lines = [item["question"]]
+        for letter, choice in zip(letters, item["choices"]):
+            lines.append(f"  {letter}) {choice}")
+        return "\n".join(lines)
+
+    def _handle_flashcards_progress(self, text, m):
+        return self.flashcards.format_progress()
+
+    # ---- fun extras handlers --------------------------------------------
+
+    def _handle_tell_joke(self, text, m):
+        lang = self.language_detector.detect(text)
+        return self.fun.random_joke(lang)
+
+    def _handle_tell_quote(self, text, m):
+        return self.fun.random_quote()
+
+    def _handle_tell_riddle(self, text, m):
+        riddle = self.fun.random_riddle()
+        return f"{riddle}\n\n(Try to answer it, or say 'reveal the riddle answer' if you're stuck.)"
+
+    def _handle_riddle_answer(self, text, m):
+        return self.fun.reveal_riddle_answer()
+
+    def _handle_tell_trivia(self, text, m):
+        lang = self.language_detector.detect(text)
+        trivia = self.fun.random_trivia(lang)
+        return f"{trivia}\n\n(Answer with the letter or the full answer.)"
+
+    # ---- text tools handlers ---------------------------------------------
+
+    def _handle_word_count(self, text, m):
+        target_text = m.group(m.lastindex).strip()
+        count = self.text_tools.word_count(target_text)
+        return f"That text has {count} word{'s' if count != 1 else ''}."
+
+    def _handle_char_count(self, text, m):
+        target_text = m.group(m.lastindex).strip()
+        with_spaces = self.text_tools.char_count(target_text)
+        without_spaces = self.text_tools.char_count(target_text, ignore_spaces=True)
+        return (f"That text has {with_spaces} characters including spaces, "
+                f"or {without_spaces} characters excluding spaces.")
+
+    def _handle_palindrome_check(self, text, m):
+        target_text = m.group(1).strip().rstrip("?.! ")
+        is_palin = self.text_tools.is_palindrome(target_text)
+        if is_palin:
+            return f"Yes, '{target_text}' is a palindrome!"
+        return f"No, '{target_text}' is not a palindrome."
+
+    def _handle_reverse_text(self, text, m):
+        target_text = m.group(m.lastindex).strip().rstrip("?.! ")
+        reversed_text = self.text_tools.reverse_text(target_text)
+        return f"Reversed: {reversed_text}"
+
+    def _handle_pig_latin(self, text, m):
+        groups = [g for g in m.groups() if g and g.strip()]
+        target_text = groups[-1].strip().rstrip("?.! ") if groups else ""
+        if not target_text:
+            return "Tell me what to translate, like 'pig latin: hello world'."
+        translated = self.text_tools.to_pig_latin(target_text)
+        return f"In Pig Latin: {translated}"
+
+    def _handle_vowel_count(self, text, m):
+        target_text = m.group(m.lastindex).strip()
+        count = self.text_tools.vowel_count(target_text)
+        return f"That text has {count} vowel{'s' if count != 1 else ''}."
+
+    def _handle_word_frequency(self, text, m):
+        target_text = m.group(m.lastindex).strip()
+        return self.text_tools.word_frequency_summary(target_text)
+
+    # ---- number tools handlers --------------------------------------------
+
+    def _handle_prime_check(self, text, m):
+        n = int(m.group(1))
+        is_p = self.number_tools.is_prime(n)
+        if is_p:
+            return f"Yes, {n} is a prime number."
+        return f"No, {n} is not a prime number."
+
+    def _handle_factorial(self, text, m):
+        groups = [g for g in m.groups() if g]
+        n = int(groups[-1])
+        if n > 170:
+            return "That number's factorial would be astronomically large - try something 170 or under."
+        result = self.number_tools.factorial(n)
+        return f"{n}! = {result}"
+
+    def _handle_fibonacci(self, text, m):
+        groups = [g for g in m.groups() if g]
+        n = int(groups[-1])
+        if n > 50:
+            return "That's a lot of Fibonacci numbers - try 50 or fewer."
+        seq = self.number_tools.fibonacci_sequence(n)
+        return f"First {n} Fibonacci numbers: {', '.join(str(x) for x in seq)}"
+
+    def _handle_number_to_words(self, text, m):
+        groups = [g for g in m.groups() if g]
+        n = int(groups[-1])
+        words = self.number_tools.number_to_words(n)
+        return f"{n} in words is: {words}"
+
+    def _handle_unit_convert(self, text, m):
+        value = float(m.group(1))
+        from_unit = m.group(2)
+        to_unit = m.group(3)
+        result = self.number_tools.convert(value, from_unit, to_unit)
+        if result is None:
+            return (f"I don't know how to convert between '{from_unit}' and '{to_unit}'. "
+                     f"I support: distance (miles/km/meters/feet/inches/cm), weight "
+                     f"(kg/lbs/ounces/grams), temperature (celsius/fahrenheit/kelvin), "
+                     f"area (acres/hectares/sqmeters/sqfeet/sqkm/sqmiles), volume "
+                     f"(gallons/liters/cups/tablespoons/teaspoons/ml), digital storage "
+                     f"(bytes/kb/mb/gb/tb), speed (mph/kmh/knots), energy "
+                     f"(calories/kcal/joules), pressure (psi/bar/atm), and time "
+                     f"(days/hours/minutes/seconds).")
+        return f"{value:g} {from_unit} is approximately {result:.3f} {to_unit}."
+
+    def _handle_describe_numbers(self, text, m):
+        groups = [g for g in m.groups() if g]
+        numbers_text = groups[-1].strip()
+        try:
+            numbers = [float(x) for x in re.findall(r"-?\d+(?:\.\d+)?", numbers_text)]
+        except ValueError:
+            return "I couldn't find any numbers in that text."
+        if not numbers:
+            return "I couldn't find any numbers in that text."
+        return self.number_tools.describe_numbers(numbers)
+
+    # ---- to-do list handlers ----------------------------------------------
+
+    def _handle_todo_add(self, text, m):
+        description = m.group(m.lastindex).strip().rstrip(".!?")
+        index = self.memory.add_todo(description)
+        return f"Added item #{index} to your to-do list: \"{description}\""
+
+    def _handle_todo_list(self, text, m):
+        todos = self.memory.list_todos()
+        if not todos:
+            return "Your to-do list is empty! Add something with 'add ... to my to-do list'."
+        lines = ["Here's your to-do list:"]
+        for i, item in enumerate(todos, start=1):
+            checkbox = "[x]" if item["done"] else "[ ]"
+            lines.append(f"  {i}. {checkbox} {item['description']}")
+        return "\n".join(lines)
+
+    def _handle_todo_complete(self, text, m):
+        # Two distinct patterns feed this handler:
+        #   pattern 1: (verb, target, 'as '?, done|complete)      -> 4 groups
+        #   pattern 2: (finished|completed|did, target)           -> 2 groups
+        # In both cases the target happens to be groups[1]; using
+        # "first truthy group" instead would incorrectly grab the verb.
+        target = m.groups()[1].strip().rstrip(".!?")
+
+        index = None
+        if target.isdigit():
+            index = int(target)
+        else:
+            index = self.memory.find_todo_by_text(target)
+
+        if index is None:
+            # No matching to-do item exists. This pattern is intentionally
+            # broad (e.g. "i did X") to catch natural phrasing, but that
+            # means it can also match unrelated sentences like "i did
+            # something kind today" that have nothing to do with the
+            # to-do list. Rather than showing a confusing "couldn't find"
+            # error for what was never really a to-do command, return
+            # None so the engine falls through to other intents/the
+            # keyword matcher, which can give a more sensible response.
+            return None
+
+        success = self.memory.complete_todo(index)
+        if success:
+            todos = self.memory.list_todos()
+            desc = todos[index - 1]["description"]
+            return f"Nice work! Marked item #{index} (\"{desc}\") as done."
+        return f"I couldn't find item #{index} on your to-do list."
+
+    def _handle_todo_remove(self, text, m):
+        groups = [g for g in m.groups() if g]
+        target = groups[-1].strip() if groups else ""
+        index = None
+        if target.isdigit():
+            index = int(target)
+        else:
+            index = self.memory.find_todo_by_text(target)
+
+        if index is None:
+            return f"I couldn't find a to-do item matching '{target}'."
+
+        todos = self.memory.list_todos()
+        if 1 <= index <= len(todos):
+            desc = todos[index - 1]["description"]
+            self.memory.remove_todo(index)
+            return f"Removed item #{index} (\"{desc}\") from your to-do list."
+        return f"I couldn't find item #{index} on your to-do list."
+
+    def _handle_todo_clear(self, text, m):
+        self.memory.clear_todos()
+        return "Your to-do list has been cleared."
+
+    def _handle_todo_cluster(self, text, m):
+        todos = self.memory.list_todos()
+        descriptions = [item["description"] for item in todos]
+        return self.notes_clusterer.cluster_notes(descriptions)
+
+    # ---- hangman mini-game handlers -----------------------------------------
+
+    def _handle_hangman_start(self, text, m):
+        intro = self.hangman.start("medium")
+        return f"Let's play Hangman! Guess a letter at a time (say 'guess X').\n\n{intro}"
+
+    def _handle_hangman_guess_letter(self, text, m):
+        letter = m.group(1)
+        message, game_over, won = self.hangman.guess_letter(letter)
+        return message
+
+    def _handle_hangman_guess_word(self, text, m):
+        word = m.group(1)
+        message, game_over, won = self.hangman.guess_word(word)
+        return message
+
+    def _handle_hangman_quit(self, text, m):
+        if not self.hangman.active:
+            return "There's no active game of Hangman to quit."
+        word = self.hangman.word
+        self.hangman.active = False
+        return f"Okay, ending the game. The word was '{word}'."
+
+    # ---- new feature handlers (added alongside the file split) --------------
+
+    def _handle_rps_play(self, text, m):
+        move = m.group(1) if m.groups() else None
+        if not move:
+            for candidate in RockPaperScissorsGame.MOVES:
+                if candidate in text.lower():
+                    move = candidate
+                    break
+        return self.rps_game.play(move or "")
+
+    def _handle_rps_score(self, text, m):
+        return self.rps_game.score_text()
+
+    def _handle_tictactoe_start(self, text, m):
+        return self.tictactoe_game.start()
+
+    def _handle_tictactoe_play(self, text, m):
+        cell = int(m.group(1))
+        message, game_over, outcome = self.tictactoe_game.play(cell)
+        return message
+
+    def _handle_roll_dice(self, text, m):
+        return self.dice_roller.roll(m.group(1))
+
+    def _handle_flip_coin(self, text, m):
+        return self.dice_roller.flip_coin()
+
+    def _raw_or_matched(self, pattern, group_index, fallback_match):
+        """Re-extracts a payload group from the untouched raw user text
+        using the same pattern the intent matched on the typo-corrected
+        text, so content-transform handlers never operate on a
+        "corrected" version of the user's actual data. Falls back to
+        the original match's group if the raw text doesn't match for
+        any reason (defensive - should be rare)."""
+        raw_text = getattr(self, "_current_raw_text", None)
+        if raw_text:
+            raw_m = re.search(pattern, raw_text, re.IGNORECASE | re.DOTALL)
+            if raw_m and len(raw_m.groups()) >= group_index:
+                return raw_m.group(group_index)
+        return fallback_match.group(group_index)
+
+    def _handle_caesar_encode(self, text, m):
+        shift = int(m.group(1)) if m.group(1) else 3
+        payload = self._raw_or_matched(
+            r"\bcaesar (?:cipher |encode )?(?:with shift\s*(-?\d+)\s*)?[:\s]+(.+)", 2, m)
+        return f"{self.cipher_tools.caesar(payload, shift)}  (shift {shift})"
+
+    def _handle_rot13(self, text, m):
+        payload = self._raw_or_matched(r"\brot13[:\s]+(.+)", 1, m)
+        return self.cipher_tools.rot13(payload)
+
+    def _handle_to_morse(self, text, m):
+        for pattern in (r"\b(?:to |convert to )?morse code[:\s]+(.+)", r"\bencode in morse[:\s]+(.+)"):
+            raw_text = getattr(self, "_current_raw_text", None)
+            if raw_text:
+                raw_m = re.search(pattern, raw_text, re.IGNORECASE | re.DOTALL)
+                if raw_m:
+                    return self.cipher_tools.to_morse(raw_m.group(1))
+        return self.cipher_tools.to_morse(m.group(1))
+
+    def _handle_from_morse(self, text, m):
+        payload = self._raw_or_matched(r"\bdecode (?:this )?morse[:\s]+([.\-/\s]+)", 1, m)
+        return self.cipher_tools.from_morse(payload)
+
+    def _handle_tip_calc(self, text, m):
+        bill = float(m.group(1))
+        tip_percent = float(m.group(2))
+        num_people = int(m.group(3)) if m.group(3) else 1
+        return self.tip_calculator.calculate(bill, tip_percent, num_people)
+
+    def _handle_fantasy_name(self, text, m):
+        return self.name_generator.fantasy_name()
+
+    def _handle_username(self, text, m):
+        return self.name_generator.username()
+
+    def _handle_project_name(self, text, m):
+        return self.name_generator.project_name()
+
+    def _handle_ascii_banner(self, text, m):
+        for pattern in (r"\bascii (?:banner|art)(?: for| of)?[:\s]+(.+)", r"\bbanner text[:\s]+(.+)"):
+            raw_text = getattr(self, "_current_raw_text", None)
+            if raw_text:
+                raw_m = re.search(pattern, raw_text, re.IGNORECASE | re.DOTALL)
+                if raw_m:
+                    return self.ascii_art.banner(raw_m.group(1))
+        return self.ascii_art.banner(m.group(1))
+
+    def _handle_ascii_shape(self, text, m):
+        size = int(m.group(2)) if m.group(2) else 5
+        return self.ascii_art.shape(m.group(1), size)
+
+    def _handle_markdown_table(self, text, m):
+        payload = self._raw_or_matched(r"\bmake (?:this |a )?markdown table[:\s]*(?s:(.+))", 1, m)
+        return self.markdown_formatter.format_table(payload)
+
+    def _handle_countdown_add(self, text, m):
+        label = m.group(1).strip()
+        raw_date = m.group(2)
+        parsed = None
+        try:
+            if "-" in raw_date:
+                parsed = dt.datetime.strptime(raw_date, "%Y-%m-%d").date()
+            else:
+                parts = raw_date.split("/")
+                if len(parts) == 2:
+                    month, day = int(parts[0]), int(parts[1])
+                    today = dt.date.today()
+                    parsed = dt.date(today.year, month, day)
+                else:
+                    month, day, year = int(parts[0]), int(parts[1]), int(parts[2])
+                    year = year if year > 100 else 2000 + year
+                    parsed = dt.date(year, month, day)
+        except ValueError:
+            return "I couldn't read that date - try YYYY-MM-DD or MM/DD."
+        return self.countdowns.add(label, parsed)
+
+    def _handle_countdown_remove(self, text, m):
+        return self.countdowns.remove(m.group(1).strip())
+
+    def _handle_countdown_dashboard(self, text, m):
+        return self.countdowns.dashboard()
+
+    def _handle_scramble_start(self, text, m):
+        return self.word_scramble.start()
+
+    def _handle_scramble_guess(self, text, m):
+        message, game_over = self.word_scramble.guess(m.group(1))
+        return message
+
+    def _handle_scramble_giveup(self, text, m):
+        if self.word_scramble.active:
+            return self.word_scramble.give_up()
+        return "There's no scramble in progress."
+
+    def _handle_anagram_find(self, text, m):
+        return self.anagram_solver.find(m.group(1))
+
+    def _handle_anagram_phrase(self, text, m):
+        return self.anagram_solver.find_phrase(m.group(1))
+
+    def _handle_scramble_hint(self, text, m):
+        return self.word_scramble.hint()
+
+    def _handle_scramble_difficulty(self, text, m):
+        return self.word_scramble.set_difficulty(m.group(1))
+
+    def _handle_rps_mode(self, text, m):
+        return self.rps_game.set_mode(m.group(1))
+
+    def _handle_tictactoe_difficulty(self, text, m):
+        return self.tictactoe_game.set_difficulty(m.group(1))
+
+    def _handle_dice_help(self, text, m):
+        return ("Dice notation: '2d6' rolls two 6-sided dice, '+3' adds a flat "
+                "modifier, multiple terms combine ('2d6+1d4+3'), '1d20 adv' rolls "
+                "twice and keeps the higher (disadvantage keeps the lower), and "
+                "'3d6!' makes each die 'explode' (reroll and add on a max result).")
+
+    def _handle_vigenere_encode(self, text, m):
+        payload, key = self._raw_or_matched_pair(
+            r"\bvigenere encode\s+(.+?)\s+(?:with key|key)\s+(\w+)\b", m)
+        return f"{self.cipher_tools.vigenere_encode(payload, key)}  (key: {key})"
+
+    def _handle_vigenere_decode(self, text, m):
+        payload, key = self._raw_or_matched_pair(
+            r"\bvigenere decode\s+(.+?)\s+(?:with key|key)\s+(\w+)\b", m)
+        return self.cipher_tools.vigenere_decode(payload, key)
+
+    def _handle_substitution_encode(self, text, m):
+        payload, key = self._raw_or_matched_pair(
+            r"\bsubstitution encode\s+(.+?)\s+(?:with key|key)\s+(\w+)\b", m)
+        return f"{self.cipher_tools.substitution_encode(payload, key)}  (key: {key})"
+
+    def _handle_substitution_decode(self, text, m):
+        payload, key = self._raw_or_matched_pair(
+            r"\bsubstitution decode\s+(.+?)\s+(?:with key|key)\s+(\w+)\b", m)
+        return self.cipher_tools.substitution_decode(payload, key)
+
+    def _handle_caesar_crack(self, text, m):
+        payload = self._raw_or_matched(r"\bcrack (?:this )?caesar[:\s]+(.+)", 1, m)
+        return self.cipher_tools.caesar_brute_force(payload)
+
+    def _handle_tip_itemized(self, text, m):
+        raw_text = getattr(self, "_current_raw_text", None) or text
+        pattern = r"\bsplit (?:the )?bill[:\s]+(.+?)\s+tip\s+(\d+(?:\.\d+)?)\s*%"
+        raw_m = re.search(pattern, raw_text, re.IGNORECASE | re.DOTALL)
+        items_text = raw_m.group(1) if raw_m else m.group(1)
+        tip_percent = float((raw_m.group(2) if raw_m else m.group(2)))
+
+        items = {}
+        for chunk in items_text.split(","):
+            chunk = chunk.strip()
+            piece = chunk.rsplit(" ", 1)
+            if len(piece) != 2:
+                continue
+            name, amount_str = piece
+            try:
+                items[name.strip()] = float(amount_str)
+            except ValueError:
+                continue
+        if not items:
+            return "Use the format 'split bill: Ada 30, Grace 20 tip 20%'."
+        return self.tip_calculator.calculate_itemized(items, tip_percent)
+
+    def _handle_ascii_box(self, text, m):
+        for pattern in (r"\bascii box[:\s]+(.+)", r"\bput (?:this |it )?in a box[:\s]+(.+)"):
+            raw_text = getattr(self, "_current_raw_text", None)
+            if raw_text:
+                raw_m = re.search(pattern, raw_text, re.IGNORECASE | re.DOTALL)
+                if raw_m:
+                    return self.ascii_art.box(raw_m.group(1))
+        return self.ascii_art.box(m.group(1))
+
+    def _handle_countdown_recurring(self, text, m):
+        label = m.group(1).strip()
+        interval_days = int(m.group(2))
+        try:
+            start = dt.datetime.strptime(m.group(3), "%Y-%m-%d").date()
+        except ValueError:
+            return "I couldn't read that start date - use YYYY-MM-DD."
+        return self.countdowns.add_recurring(label, start, interval_days)
+
+    def _handle_countdown_filter(self, text, m):
+        return self.countdowns.dashboard(category_filter=m.group(1))
+
+    def _handle_check_urgency(self, text, m):
+        payload = self._raw_or_matched(r"\bhow urgent is[:\s]+(.+)", 1, m)
+        return self.urgency_classifier.format_predict(payload)
+
+    def _handle_check_politeness(self, text, m):
+        payload = self._raw_or_matched(r"\bhow polite is[:\s]+(.+)", 1, m)
+        return self.politeness_classifier.format_predict(payload)
+
+    def _handle_check_question_type(self, text, m):
+        payload = self._raw_or_matched(r"\bwhat (?:type|kind) of question is[:\s]+(.+)", 1, m)
+        return self.question_type_classifier.format_predict(payload)
+
+    def _handle_check_complexity(self, text, m):
+        payload = self._raw_or_matched(r"\bhow complex is[:\s]+(.+)", 1, m)
+        return self.text_complexity_regressor.format_predict(payload)
+
+    def _handle_check_emoji(self, text, m):
+        payload = self._raw_or_matched(r"\bwhat emoji (?:fits|matches)[:\s]+(.+)", 1, m)
+        return self.emoji_predictor.format_predict(payload)
+
+    def _raw_or_matched_pair(self, pattern, fallback_match):
+        """Like _raw_or_matched, but for handlers needing two groups
+        (payload + key) - re-extracts both from the untouched raw text
+        so typo correction never mangles cipher payloads or keys."""
+        raw_text = getattr(self, "_current_raw_text", None)
+        if raw_text:
+            raw_m = re.search(pattern, raw_text, re.IGNORECASE | re.DOTALL)
+            if raw_m and len(raw_m.groups()) >= 2:
+                return raw_m.group(1), raw_m.group(2)
+        return fallback_match.group(1), fallback_match.group(2)
+
+    def _handle_session_stats(self, text, m):
+        return self.logger.session_stats()
+
+    def _handle_visit_info(self, text, m):
+        count = self.memory.get_visit_count()
+        created = self.memory.get_created_at()
+        if count <= 1:
+            return "This is the first time we've talked - nice to meet you!"
+        return (f"We've talked {count} times now! I first remember meeting you "
+                f"around {created.strftime('%B %d, %Y')}.")
+
+    def _handle_help(self, text, m):
+        bot_name = self.bot_name()
+        return textwrap.dedent(f"""\
+            I'm {bot_name}, a mostly rule-based chatbot with one real neural
+            network in me for guessing intent. Here's what I can do:
+
+            MEMORY
+              "my name is Alex"           -> I'll remember your name
+              "my favorite color is blue" -> I'll remember any fact like this
+              "what's my favorite color"  -> I'll recall it
+              "forget my favorite color"  -> I'll forget a specific fact
+              "what do you know about me" -> list everything I remember
+              "forget everything"         -> wipe my memory of you
+
+            DATE & TIME
+              "what time is it" / "what's the date"
+              "what day is tomorrow" / "what day is next friday"
+              "how many days until christmas"
+              "how many days between 2026-01-01 and 2026-12-25"
+              "what date is 10 days after 2026-01-01"
+              "how old would i be if born on 2000-01-01"
+              "is 2024 a leap year"
+
+            STORIES
+              "tell me a story"
+              "tell me a fantasy story"   (categories: adventure, mystery, fantasy, scifi)
+
+            POEMS
+              "write a haiku about the ocean"
+              "write an acrostic for Alex"
+              "write a poem about love"
+
+            FUN EXTRAS
+              "tell me a joke" / "tell me a quote"
+              "tell me a riddle"          -> then guess the answer, or say
+                                              "reveal the riddle answer"
+              "give me a trivia question" -> answer with a letter or text
+
+            TEXT TOOLS
+              "count the words in: a quick brown fox"
+              "is: racecar a palindrome"
+              "reverse text: hello world"
+              "pig latin: hello world"
+              "count the vowels in: hello world"
+              "word frequency of: the cat sat on the mat"
+
+            NUMBER TOOLS
+              "is 17 prime"
+              "factorial of 5"
+              "first 10 fibonacci"
+              "spell out 1234"
+              "convert 10 miles to km"
+              "describe these numbers: 1, 2, 3, 4, 100"
+
+            TO-DO LIST
+              "add buy milk to my to-do list" (or "remind me to ...")
+              "show my to-do list"
+              "mark 1 as done" / "i finished buy milk"
+              "remove 1 from my to-do list"
+              "cluster my to-do list"     -> sklearn KMeans demo grouping
+
+            HANGMAN
+              "play hangman"              -> starts a game
+              "guess e" (or just type a single letter while playing)
+              "guess the word ELEPHANT"
+              "quit hangman"
+
+            NEURAL NETWORKS (real, trained models)
+              If nothing above matches exactly, a trained neural network
+              guesses what you meant from free-form phrasing, and a
+              second one reads your tone to color my responses.
+              "no, i meant ..."           -> correct the intent guess
+              "retrain"                   -> relearn from your corrections
+              "nn stats"                  -> real accuracy numbers for both models
+              "compare models"            -> see both models' takes on your last message
+              You'll also see "(you might also want to ...)" suggestions
+              after some replies - a third, separate model predicting
+              what you might want to ask next.
+
+            LLM HYBRID (optional, off by default)
+              The networks above can only RECOGNIZE things; they can't
+              generate brand-new sentences. For that, I can optionally
+              call a real LLM (Claude or GPT) as a last resort when
+              nothing else understands you - needs internet and your
+              own API key in a config file. See 'llm status' for setup.
+              "llm status"                -> check if it's configured/on
+              "change to gpt" / "change to claude" -> switch providers
+              "forget our conversation"   -> clear its short memory
+
+            TOPICS
+              "let's talk about X"        -> jump straight into a topic
+                                             (date, anxiety, money, grief,
+                                             pets, and 80+ others)
+
+            SYSTEM & IMAGES (psutil, Pillow, OpenCV, Keras)
+              "system status"             -> live CPU/RAM/disk/battery
+              "analyze image: /path.jpg"  -> real computed image info
+                                             (colors, brightness, faces, edges)
+              "what shape is this: /path.png" -> basic shape classifier
+                                             (circle/square/triangle only -
+                                             a small Keras CNN demo, not a
+                                             general photo classifier)
+              "color palette of: /path.jpg"   -> dominant colors via k-means
+              "count objects in: /path.jpg"   -> contour-based object count
+              "check contrast of: /path.jpg"  -> RMS contrast + histogram info
+              "what color is the shape in: /path.jpg" -> identifies the main
+                                             object's color (contour detection
+                                             + masked average color)
+              "draw me a red circle"      -> generates a 256x256 image with a
+                                             trained Keras CNN decoder (5
+                                             Conv2DTranspose layers) or a
+                                             rule-based renderer without
+                                             TensorFlow - shapes: circle/
+                                             square/triangle, 10 colors
+              "generate a qr code for: X" -> from-scratch QR code encoder,
+                                             saved as a PNG
+              "style transfer: /content.jpg with /style.jpg" -> neural style
+                                             transfer (VGG19 features) if
+                                             weights are available, or a
+                                             classical histogram-matching
+                                             color-transfer fallback
+
+            OFFLINE UTILITIES
+              "sha256 hash of: X" / "md5 hash of: X" -> real hashlib digests
+              "base64 encode: X" / "base64 decode: X"
+              "validate this json: {...}" -> parse + pretty-print or a
+                                             precise error location
+              "validate this csv: a,b\\n1,2" -> row/column count + consistency
+              "extract entities from: X"  -> rule-based emails/URLs/money/
+                                             times/phone numbers/hashtags/
+                                             proper nouns (no ML NER model)
+
+            CONVERSATION QUALITY & MEMORY
+              "what would you retrieve for: X" -> previews what RAGContext
+                                             Builder would inject into an LLM
+                                             prompt for that message (real
+                                             semantic-search retrieval,
+                                             Section 6I-EXT5)
+              "what's my tone"            -> reports detected casual/formal
+                                             register (AdaptiveToneTracker,
+                                             Section 6D4) - biases which
+                                             response-bank phrasing gets used
+              "run the accuracy test"     -> real intent-matching hit rate
+                                             against a held-out test set
+              "scan for typo collisions"  -> finds more edit-distance-1 word
+                                             pairs the typo-corrector could
+                                             silently mangle (the same bug
+                                             class as blur/blue, world/would)
+
+            EXTERNAL APIS (need internet; all fail closed if unavailable)
+              "weather in Nairobi"        -> real current weather (Open-Meteo)
+              "convert 100 USD to EUR"    -> real exchange rate (Frankfurter)
+              "online trivia"             -> fresh question (Open Trivia DB),
+                                             falls back to my offline bank
+              "what's in the news"        -> top headlines (Hacker News)
+              "define: serendipity"       -> real dictionary lookup
+
+            MEMORY SEARCH & CONVERSATION TOOLS
+              "search my memory for X"    -> semantic search over remembered
+                                             facts (torch embeddings when
+                                             available, TF-IDF otherwise)
+              "mood forecast"             -> where the conversation's tone
+                                             is trending (Keras LSTM)
+              "summarize this conversation" -> LLM summary if configured,
+                                             otherwise an offline extractive
+                                             summary (TF-IDF sentence ranking)
+              "find duplicate facts"      -> flags remembered facts that
+                                             might mean the same thing
+              "visualize my embeddings"   -> 2D PCA projection of your
+                                             remembered facts' embeddings
+              "ml backends status"        -> which real backend (vs. offline
+                                             fallback) is active for every
+                                             model/connector in one place
+              "predict next word after: X" -> self-attention transformer if
+                                             torch is installed (Section 14B),
+                                             else rule-based trigram backoff
+                                             (Section 14) - same command either way
+              "continue this: X"          -> generates a short continuation,
+                                             same transformer/trigram fallback
+              "tell me a horror story" / "tell me a slice of life story"
+                                          -> two newer story categories
+
+            OTHER
+              "what is 12 * 4"            -> simple arithmetic
+              "square root of 81" / "2^10" / "log of 1000" / "sin(30) degrees"
+                                          -> scientific calculator functions
+              "what is 20% of 50" / "percent change from 50 to 75"
+                                          -> percentage calculations
+              "convert hello world to snake case" -> text case conversion
+                                             (snake/kebab/camel/pascal/title/
+                                             upper/lower)
+              "generate a password" / "generate a passphrase"
+                                          -> secure random password/passphrase
+              "convert 5 gb to mb"        -> now also covers area, volume,
+                                             digital storage, speed, energy,
+                                             pressure, and time (not just the
+                                             original distance/weight/temp)
+              "go back to what we were talking about" -> recalls recent
+                                             topics this session (rule-based,
+                                             no learned dialogue model)
+              "quiz me"                   -> starts a Leitner-system
+                                             spaced-repetition flashcard
+                                             review over the trivia bank
+              "flashcard progress"        -> shows your flashcard box counts
+              "show stats"                -> conversation statistics
+              "db stats"                  -> what's stored in my database
+              "call yourself Max"         -> rename me
+              "help"                      -> this message
+              "bye" / "quit" / "exit"     -> end the conversation
+        """)
+
+    def _pick_toned_response(self, bank: dict, bank_name: str, lang: str = "en") -> str:
+        """
+        Picks a response from `bank[lang]`, biased by AdaptiveToneTracker
+        (Section 6D4): leans into the casual/Sheng supplement phrasings
+        for a user texting casually, or filters them OUT (falling back
+        to the bank's original, pre-supplement phrasings) for a user
+        writing formally. Falls back to an unbiased pick from the
+        whole pool for a neutral-register user, or if the relevant
+        supplement has no entries in this language.
+        """
+        pool = bank.get(lang) or bank.get("en", [])
+        if not pool:
+            return ""
+
+        if self.tone_tracker.is_casual():
+            casual_extra = _CASUAL_TONE_PHRASES.get(bank_name, {}).get(lang, [])
+            sheng_extra = _SHENG_PHRASES.get(bank_name, {}).get(lang, [])
+            casual_pool = [p for p in (casual_extra + sheng_extra) if p in pool]
+            if casual_pool:
+                return random.choice(casual_pool)
+        elif self.tone_tracker.is_formal():
+            casual_extra = set(_CASUAL_TONE_PHRASES.get(bank_name, {}).get(lang, []))
+            sheng_extra = set(_SHENG_PHRASES.get(bank_name, {}).get(lang, []))
+            formal_pool = [p for p in pool if p not in casual_extra and p not in sheng_extra]
+            if formal_pool:
+                return random.choice(formal_pool)
+
+        return random.choice(pool)
+
+    def _handle_greeting(self, text, m):
+        lang = self.language_detector.detect(text)
+        name = self.user_name()
+        base = self._pick_toned_response(GREETING_RESPONSES, "GREETING_RESPONSES", lang)
+        if name:
+            connector = {
+                "en": "It's good to chat with you again,",
+                "sw": "Nafurahi kuongea nawe tena,",
+                "fr": "C'est bon de te reparler,",
+            }[lang]
+            return f"{base.rstrip('.')} {connector} {name}."
+        return base
+
+    def _handle_farewell(self, text, m):
+        lang = self.language_detector.detect(text)
+        self.running = False
+        name = self.user_name()
+        base = self._pick_toned_response(FAREWELL_RESPONSES, "FAREWELL_RESPONSES", lang)
+        if name:
+            return f"{base.rstrip('.!')}, {name}!"
+        return base
+
+    def _handle_thanks(self, text, m):
+        lang = self.language_detector.detect(text)
+        return self._pick_toned_response(THANKS_RESPONSES, "THANKS_RESPONSES", lang)
+
+    def _handle_how_are_you(self, text, m):
+        lang = self.language_detector.detect(text)
+        return self._pick_toned_response(HOW_ARE_YOU_RESPONSES, "HOW_ARE_YOU_RESPONSES", lang)
+
+    def _handle_tone_status(self, text, m):
+        """Reports the currently detected conversational register
+        (Section 6D4)."""
+        return self.tone_tracker.format_status()
+
+    def _handle_compliment(self, text, m):
+        lang = self.language_detector.detect(text)
+        return random.choice(COMPLIMENT_RESPONSES[lang])
+
+    def _handle_are_you_ai(self, text, m):
+        llm_note = ""
+        if self.llm.is_available():
+            llm_note = (f" I also have an optional LLM hybrid turned on right now "
+                        f"({self.llm.provider()}) - it's the one part of me that can "
+                        "generate genuinely new sentences, used only when nothing else "
+                        "understands you. Say 'llm status' for details.")
+        else:
+            llm_note = (" There's also an optional LLM hybrid built in but currently "
+                        "off (it needs an API key and internet) - say 'llm status' "
+                        "for details.")
+        return ("I'm mostly a rule-based computer program - pattern matching "
+                "and if/elif logic written by a human for most of what I do. "
+                "I do have two real neural networks in me, though: an intent "
+                f"classifier ({self.nn_intent.backend} backend) that guesses what "
+                "you mean when nothing else matches, and a separate sentiment "
+                f"classifier ({self.sentiment_clf.backend} backend) that reads "
+                "the mood of what you say to color my tone. Both can learn from "
+                "corrections - say 'no, i meant ...' to teach the intent one, or "
+                f"'nn stats' to see real accuracy numbers for both.{llm_note}")
+
+    def _handle_correct_intent(self, text, m):
+        """
+        Handles 'no, i meant ...' style corrections to the neural
+        classifier's last guess. The user describes what they meant in
+        free text (e.g. 'no, i meant tell me a joke'); we resolve that
+        free text to one of the NN's KNOWN labels by finding which
+        existing training example it's closest to (via the same
+        vectorizer the classifier already uses), rather than requiring
+        the user to type an internal label name verbatim.
+
+        This is the ONLY way new training examples enter the system -
+        always a user-typed, user-verified statement of what they
+        meant, never the model's own unverified guess about itself.
+        """
+        if self.last_nn_prediction is None:
+            return ("I don't have a recent guess to correct - ask me something "
+                     "first, and if I get it wrong, say 'no, i meant ...' right after.")
+
+        corrected_phrase = m.group(1).strip().rstrip(".!?")
+        if not corrected_phrase:
+            return "What did you mean instead? Try 'no, i meant tell me a joke', for example."
+
+        original_text, wrong_label = self.last_nn_prediction
+
+        # Resolve the free-text correction to a known label by nearest
+        # match against the classifier's OWN vectorizer space - reusing
+        # vocabulary it already understands rather than introducing a
+        # brand-new, unvalidated label name from a typo or vague phrase.
+        resolved_label = self._resolve_label_from_text(corrected_phrase)
+        if resolved_label is None:
+            known = ", ".join(sorted(self.nn_intent.known_labels())[:8]) + ", ..."
+            return (f"I'm not sure which known intent that matches yet. Try "
+                     f"phrasing it more like one of the things I already do "
+                     f"(e.g. {known}).")
+
+        self.nn_intent.add_correction(original_text, resolved_label)
+        return (f"Got it - I've noted that \"{original_text}\" should mean "
+                 f"'{resolved_label}', not '{wrong_label}'. This is saved, but "
+                 f"won't change my behavior until you say 'retrain' (so you can "
+                 f"batch up several corrections first if you want).")
+
+    def _resolve_label_from_text(self, free_text: str):
+        """
+        Maps free-text like 'tell me a joke' to the closest known intent
+        label, by checking it against the NN's own training examples
+        with simple TF-IDF cosine similarity (read-only - does not
+        affect the trained model). Returns None if nothing is close
+        enough to be confident about.
+        """
+        examples = self.nn_intent._all_examples()
+        texts = [t for t, _ in examples]
+        labels = [l for _, l in examples]
+
+        vec = TfidfVectorizer(ngram_range=(1, 2))
+        try:
+            example_vectors = vec.fit_transform(texts)
+            query_vector = vec.transform([free_text])
+        except ValueError:
+            return None
+
+        similarities = cosine_similarity(query_vector, example_vectors)[0]
+        best_idx = int(np.argmax(similarities))
+        if float(similarities[best_idx]) < 0.2:
+            return None
+        return labels[best_idx]
+
+    def _handle_retrain_nn(self, text, m):
+        """
+        Refits BOTH neural networks (intent classifier and sentiment
+        classifier) on their base datasets plus every correction
+        collected so far. Reports real held-out validation accuracy
+        before and after, not just a loss number, so "did this
+        actually help" has an honest answer instead of being assumed.
+        Only ever trains on user-verified corrections - never on either
+        model's own unverified predictions.
+        """
+        num_intent_corrections = len(self.nn_intent.corrections)
+        num_sentiment_corrections = len(self.sentiment_clf.corrections)
+        if num_intent_corrections == 0 and num_sentiment_corrections == 0:
+            return ("I don't have any corrections to learn from yet. If I "
+                     "guess wrong, tell me with 'no, i meant ...' first.")
+
+        lines = []
+
+        if num_intent_corrections > 0:
+            _, acc_before, acc_after = self.nn_intent.retrain()
+            acc_line = self._format_accuracy_change(acc_before, acc_after)
+            lines.append(
+                f"Intent classifier ({self.nn_intent.backend}): retrained on "
+                f"{len(self.nn_intent.base_examples)} original examples plus "
+                f"{num_intent_corrections} correction(s).{acc_line}"
+            )
+        else:
+            lines.append("Intent classifier: no corrections to learn from yet.")
+
+        if num_sentiment_corrections > 0:
+            _, s_acc_before, s_acc_after = self.sentiment_clf.retrain()
+            s_acc_line = self._format_accuracy_change(s_acc_before, s_acc_after)
+            lines.append(
+                f"Sentiment classifier ({self.sentiment_clf.backend}): retrained on "
+                f"{len(self.sentiment_clf.base_examples)} original examples plus "
+                f"{num_sentiment_corrections} correction(s).{s_acc_line}"
+            )
+        else:
+            lines.append("Sentiment classifier: no corrections to learn from yet.")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_accuracy_change(acc_before, acc_after):
+        if acc_before is not None and acc_after is not None:
+            delta = acc_after - acc_before
+            arrow = "up" if delta > 0.001 else ("down" if delta < -0.001 else "unchanged")
+            return f" Held-out validation accuracy: {acc_before:.1%} -> {acc_after:.1%} ({arrow})."
+        if acc_after is not None:
+            return f" Held-out validation accuracy: {acc_after:.1%}."
+        return ""
+
+    def _handle_nn_stats(self, text, m):
+        """
+        Reports real, measured statistics about both neural networks -
+        backend, dataset size, number of user corrections collected,
+        the held-out validation accuracy from the most recent fit, and
+        (if more than one fit has happened) a real accuracy-over-time
+        trend pulled from the persisted training_history - rather than
+        vague claims about how well they work.
+        """
+        ic = self.nn_intent
+        sc = self.sentiment_clf
+
+        def fmt_acc(acc):
+            return f"{acc:.1%}" if acc is not None else "not available (too little data to hold out a validation set)"
+
+        def small_sample_note(val_size):
+            if val_size is not None and val_size < 15:
+                return ("  (Note: small validation set - each example is "
+                        f"worth ~{100 / val_size:.0f} percentage points, so "
+                        "treat this number as a rough estimate, not exact.)")
+            return None
+
+        def trend_line(history):
+            """Builds a compact 'acc1 -> acc2 -> acc3' trend string from
+            persisted training_history snapshots, skipping entries with
+            no recorded accuracy. Returns None if there's nothing to show
+            (fewer than 2 data points)."""
+            accs = [snap["val_accuracy"] for snap in history if snap.get("val_accuracy") is not None]
+            if len(accs) < 2:
+                return None
+            # Keep the line readable - show at most the last 6 fits.
+            shown = accs[-6:]
+            arrow_str = " -> ".join(f"{a:.1%}" for a in shown)
+            prefix = "... " if len(accs) > len(shown) else ""
+            return f"  Accuracy trend ({len(accs)} fits recorded): {prefix}{arrow_str}"
+
+        lines = [
+            "NEURAL NETWORK STATS",
+            "",
+            f"Intent classifier ({ic.backend} backend):",
+            f"  Classes: {len(ic.known_labels())}",
+            f"  Base examples: {len(ic.base_examples)}  |  User corrections: {len(ic.corrections)}",
+            f"  Train/val split: {ic.last_train_size} / {ic.last_val_size}",
+            f"  Held-out validation accuracy: {fmt_acc(ic.last_val_accuracy)}",
+            f"  Final training loss: {ic.last_training_loss:.4f}" if ic.last_training_loss is not None else "  Final training loss: n/a",
+        ]
+        ic_trend = trend_line(ic.training_history)
+        if ic_trend:
+            lines.append(ic_trend)
+        ic_note = small_sample_note(ic.last_val_size)
+        if ic_note:
+            lines.append(ic_note)
+
+        lines += [
+            "",
+            f"Sentiment classifier ({sc.backend} backend):",
+            f"  Classes: {len(sc.known_labels())} ({', '.join(sc.known_labels())})",
+            f"  Base examples: {len(sc.base_examples)}  |  User corrections: {len(sc.corrections)}",
+            f"  Train/val split: {sc.last_train_size} / {sc.last_val_size}",
+            f"  Held-out validation accuracy: {fmt_acc(sc.last_val_accuracy)}",
+            f"  Final training loss: {sc.last_training_loss:.4f}" if sc.last_training_loss is not None else "  Final training loss: n/a",
+        ]
+        sc_trend = trend_line(sc.training_history)
+        if sc_trend:
+            lines.append(sc_trend)
+        sc_note = small_sample_note(sc.last_val_size)
+        if sc_note:
+            lines.append(sc_note)
+
+        return "\n".join(lines)
+
+    def _handle_compare_models(self, text, m):
+        """
+        Shows what BOTH neural networks independently predict for the
+        last message you sent (or the current one, if this is the
+        first thing you've said) - intent classifier's best guess plus
+        confidence, and the sentiment classifier's reading - side by
+        side, so the two models' real, distinct jobs are visible
+        rather than abstract.
+        """
+        sample_text = self.previous_user_message or (
+            self.last_nn_prediction[0] if self.last_nn_prediction else None
+        )
+        if sample_text is None:
+            return ("I don't have a recent message to compare predictions on yet - "
+                     "ask me something first, then say 'compare models'.")
+
+        intent_result = self.nn_intent.predict(sample_text)
+        sentiment_result = self.sentiment_clf.predict(sample_text)
+
+        lines = [f'Comparing both models on: "{sample_text}"', ""]
+        if intent_result is not None:
+            label, conf = intent_result
+            lines.append(f"Intent classifier  -> {label}  ({conf:.0%} confidence)")
+        else:
+            lines.append("Intent classifier  -> no confident guess")
+
+        if sentiment_result is not None:
+            label, conf = sentiment_result
+            lines.append(f"Sentiment classifier -> {label}  ({conf:.0%} confidence)")
+        else:
+            lines.append("Sentiment classifier -> no confident guess")
+
+        return "\n".join(lines)
+
+    def _handle_llm_status(self, text, m):
+        """
+        Reports the real, current state of the optional LLM hybrid
+        fallback (Section 6I) - which provider is selected, whether
+        it's configured and enabled, and what happened on its most
+        recent attempt (if any) - rather than a vague yes/no.
+        """
+        if not os.path.exists(self.llm.config_path):
+            return ("The LLM hybrid hasn't been set up yet - it should auto-create "
+                     f"a config file at {os.path.basename(self.llm.config_path)} the "
+                     "next time I start. Fill in your API key there and set "
+                     "'enabled' to true to turn it on.")
+
+        self.llm.reload_config()  # pick up any manual edits since startup
+        enabled = bool(self.llm.config.get("enabled"))
+        has_key = self.llm.is_available()
+
+        if not enabled:
+            return (f"The LLM hybrid is currently OFF. Edit "
+                     f"{os.path.basename(self.llm.config_path)} and set "
+                     "'enabled' to true (with a real API key in 'api_key') to turn it on.")
+        if not has_key:
+            expected_prefix = "sk-ant-" if self.llm.provider() == "anthropic" else "sk-"
+            return (f"The LLM hybrid is enabled (provider: {self.llm.provider()}), but I "
+                     f"don't see what looks like a valid API key in the config file (it "
+                     f"should start with '{expected_prefix}'). Double-check it and save "
+                     f"the file again.")
+
+        provider = self.llm.provider()
+        model = (self.llm.config.get("model", "claude-sonnet-4-6") if provider == "anthropic"
+                  else self.llm.config.get("openai_model", "gpt-5.5"))
+        history_len = len(self.llm.history) // 2
+        last_error_note = f" Last attempt failed: {self.llm.last_error}." if self.llm.last_error else ""
+        return (f"The LLM hybrid is ON, using {provider} ('{model}'). It only gets called "
+                 f"when nothing else (rules, both classifiers) understands your "
+                 f"message with enough confidence. Conversation history with it: "
+                 f"{history_len} exchange(s) remembered this session.{last_error_note}")
+
+    def _handle_llm_clear_history(self, text, m):
+        """Clears the LLM hybrid's short conversation memory (NOT the
+        bot's regular remembered facts about the user - those are
+        separate and untouched)."""
+        had_history = len(self.llm.history) > 0
+        self.llm.clear_history()
+        if had_history:
+            return "Cleared my conversation history with the LLM fallback. Starting fresh there."
+        return "There wasn't any LLM conversation history to clear, but consider it done."
+
+    def _handle_db_stats(self, text, m):
+        """
+        Reports real, live row counts from every table in the shared
+        SQLite database (Section 1B), plus the on-disk file size -
+        actual queries against the actual database, not a cached or
+        approximate number.
+        """
+        counts = self.db.table_counts()
+        size_bytes = self.db.file_size_bytes()
+        size_str = f"{size_bytes / 1024:.1f} KB" if size_bytes < 1024 * 1024 else f"{size_bytes / (1024 * 1024):.2f} MB"
+
+        lines = [
+            f"DATABASE STATS ({os.path.basename(self.db.db_path)}, {size_str} on disk)",
+            "",
+            f"  Remembered facts:        {counts['facts']}",
+            f"  To-do items:             {counts['todos']}",
+            f"  Conversation log rows:   {counts['conversation_log']}",
+            f"  Classifier corrections:  {counts['corrections']}",
+            f"  Training history snaps:  {counts['training_history']}",
+        ]
+        return "\n".join(lines)
+
+    def _handle_change_llm_provider(self, text, m):
+        """
+        Handles in-chat provider switching ('change to gpt', 'switch to
+        claude', 'use openai now', etc.) so the user doesn't need to
+        hand-edit chatbot_llm_config.json just to swap which LLM the
+        hybrid fallback (Section 6I) calls. Normalizes common aliases
+        for each provider, then delegates to LLMConnector.set_provider(),
+        which persists the choice to disk.
+
+        Honest about what switching can and can't do: it can change
+        WHICH provider is active immediately, but it can't supply an
+        API key that was never entered - if the target provider has no
+        usable key saved, the user is told exactly that, with no
+        pretense that the switch silently fixed itself.
+        """
+        captured = next((g for g in m.groups() if g), "").lower()
+
+        openai_aliases = {"gpt", "openai", "chatgpt"}
+        anthropic_aliases = {"claude", "anthropic", "sonnet"}
+
+        if captured in openai_aliases:
+            target = "openai"
+        elif captured in anthropic_aliases:
+            target = "anthropic"
+        else:
+            return ("I can switch between 'gpt' (OpenAI) and 'claude' (Anthropic) - "
+                     "try 'change to gpt' or 'change to claude'.")
+
+        result = self.llm.set_provider(target)
+        provider_label = "OpenAI (GPT)" if target == "openai" else "Anthropic (Claude)"
+
+        if not result["has_key"]:
+            key_hint = "starting with 'sk-'" if target == "openai" else "starting with 'sk-ant-'"
+            return (f"Switched the LLM hybrid to {provider_label}, but I don't see a valid-looking "
+                     f"API key for it yet in the config file (it should be {key_hint}). "
+                     f"Add one to 'api_key' in chatbot_llm_config.json and it'll work from there - "
+                     f"this part still needs a real key, I can't conjure one.")
+
+        if result["switched"]:
+            return (f"Done - the LLM hybrid is now using {provider_label}. "
+                     f"Conversation history with the previous provider was cleared, "
+                     f"since it wouldn't mean anything to a different model.")
+
+        return f"The LLM hybrid is already set to {provider_label} - no change needed."
+
+    def _handle_system_status(self, text, m):
+        """Reports live CPU/RAM/disk/battery readings via psutil
+        (Section 12) - real numbers pulled from the actual device
+        running the bot, not estimates."""
+        return SystemStatus.format_report()
+
+    def _handle_analyze_image(self, text, m):
+        """
+        Real, computed image analysis via Pillow/OpenCV (Section 12,
+        ImageAnalyzer) - dimensions, dominant color, brightness,
+        sharpness, and (if OpenCV is installed) detected faces and edge
+        density. The user supplies a file path; nothing is assumed
+        about content beyond what's actually measured from the pixels.
+        """
+        filepath = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not filepath:
+            return "Give me a file path to analyze - for example, 'analyze image: /path/to/photo.jpg'."
+        return self.image_analyzer.format_report(filepath)
+
+    def _handle_classify_shape(self, text, m):
+        """
+        Classifies a basic shape (circle/square/triangle) in an image
+        using ShapeClassifier (Section 12) - a real trained Keras CNN
+        when TensorFlow/Keras is installed, or a calibrated two-feature
+        geometric heuristic otherwise. Explicitly NOT a general photo
+        classifier - only recognizes these three basic shapes, and says
+        so in its own response.
+        """
+        filepath = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not filepath:
+            return "Give me a file path to classify - for example, 'what shape is this: /path/to/image.png'."
+        return self.shape_classifier.format_report(filepath)
+
+    def _handle_generate_image(self, text, m):
+        """
+        Generates a small shape image using CNNImageGenerator (Section
+        12B) - a trained Keras Conv2DTranspose decoder when TensorFlow
+        is available, or the same deterministic Pillow renderer used
+        as its training target otherwise (genuinely rule-based, no
+        network). Saves to a timestamped file under a temp-ish output
+        directory and reports the path.
+        """
+        color = m.group(1).strip().lower() if m.group(1) else ""
+        shape = m.group(2).strip().lower() if m.group(2) else ""
+        # The regex groups are (color, shape) in that order for every
+        # registered pattern (e.g. "draw me a red circle") - if the
+        # words are swapped (someone wrote the shape first), try that
+        # ordering too before giving up, rather than failing outright.
+        if shape not in GENERATOR_SHAPES and color in GENERATOR_SHAPES:
+            color, shape = shape, color
+
+        if shape not in GENERATOR_SHAPES or color not in GENERATOR_COLORS:
+            return (f"I can generate these shapes: {', '.join(GENERATOR_SHAPES)}, "
+                    f"in these colors: {', '.join(GENERATOR_COLORS)}. "
+                    f"Try something like 'draw me a red circle'.")
+
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_images")
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        output_path = os.path.join(output_dir, f"{color}_{shape}_{timestamp}.png")
+        return self.image_generator.format_generate(shape, color, output_path)
+
+    def _handle_real_photo_request(self, text, m):
+        """
+        Step 1 of the REAL-photo path (Section 13, RealPhotoConnector)
+        - deliberately separate from _handle_generate_image above,
+        which stays fully offline. This one needs a real network call
+        to an external image-search API, so it never fires
+        immediately: it just records what was asked for and asks the
+        person to confirm going online first. The actual fetch happens
+        in _resolve_pending_real_photo, on the person's NEXT message.
+        """
+        color = m.group(1).strip().lower() if m.group(1) else ""
+        shape = m.group(2).strip().lower() if m.group(2) else ""
+        if shape not in GENERATOR_SHAPES and color in GENERATOR_SHAPES:
+            color, shape = shape, color
+
+        if shape not in GENERATOR_SHAPES or color not in GENERATOR_COLORS:
+            return (f"I can look for real photos of these shapes: {', '.join(GENERATOR_SHAPES)}, "
+                    f"in these colors: {', '.join(GENERATOR_COLORS)}. "
+                    f"Try something like 'get a real photo of a red circle'.")
+
+        self._pending_real_photo = (shape, color)
+        object_noun = RealPhotoConnector.SHAPE_TO_OBJECT_NOUN.get(shape, shape)
+        return (f"That means going online to search a real photo database (Openverse) for "
+                f"'{color} {object_noun}', rather than generating one offline like the usual "
+                f"image command does. Want me to go ahead? (yes/no)")
+
+    def _resolve_pending_real_photo(self, user_text: str) -> str:
+        """Step 2 of the real-photo path: interprets THIS message as
+        the yes/no answer to the confirmation _handle_real_photo_request
+        just asked, and only makes the actual network call if the
+        answer was a clear yes. Any answer that isn't a recognized
+        affirmative is treated as declining, rather than leaving the
+        bot stuck waiting for an exact keyword."""
+        shape, color = self._pending_real_photo
+        self._pending_real_photo = None
+
+        reply = user_text.strip().lower().rstrip(".!?")
+        affirmative = {"yes", "y", "yeah", "yep", "yup", "sure", "ok", "okay",
+                       "go ahead", "do it", "please", "yes please", "sounds good"}
+        if reply not in affirmative:
+            return "No problem, staying offline - just ask again if you change your mind."
+
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_images")
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        output_path = os.path.join(output_dir, f"real_{color}_{shape}_{timestamp}.png")
+
+        result = self.real_photo_connector.fetch_and_save(shape, color, output_path)
+        if "error" in result:
+            return (f"Couldn't get a real photo ({result['error']}). "
+                    f"You can still try the regular offline 'draw me a {color} {shape}' instead.")
+        note = f" ({result['note']})" if result.get("note") else ""
+        return (f"Got a real photo: saved to {result['path']}.{note}\n"
+                f"\"{result['title']}\" by {result['creator']} ({result['license']}).")
+
+    # ---- new OpenCV feature handlers (Section 12 extensions) --------------
+
+    def _handle_image_palette(self, text, m):
+        """Real k-means color-clustering (OpenCV cv2.kmeans, Section
+        12) rather than a nearest-named-color heuristic."""
+        filepath = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not filepath:
+            return "Give me a file path - for example, 'color palette of: /path/to/photo.jpg'."
+        return self.image_analyzer.format_palette(filepath)
+
+    def _handle_image_object_count(self, text, m):
+        """Contour-based object counting (OpenCV, Section 12) - works
+        best on a plain background."""
+        filepath = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not filepath:
+            return "Give me a file path - for example, 'count objects in: /path/to/photo.jpg'."
+        return self.image_analyzer.format_object_count(filepath)
+
+    def _handle_image_contrast(self, text, m):
+        """RMS contrast + histogram-equalization preview (OpenCV,
+        Section 12)."""
+        filepath = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not filepath:
+            return "Give me a file path - for example, 'check contrast of: /path/to/photo.jpg'."
+        return self.image_analyzer.format_contrast_report(filepath)
+
+    def _handle_image_object_color(self, text, m):
+        """Identifies the color of the main foreground shape/object in
+        an image (OpenCV contour detection + masked average color,
+        Section 12) - works best on a plain background with one clear
+        foreground shape, same caveat as count_objects/image_palette."""
+        filepath = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not filepath:
+            return "Give me a file path - for example, 'what color is the shape in: /path/to/photo.jpg'."
+        return self.image_analyzer.format_object_color(filepath)
+
+    def _handle_generate_qr_code(self, text, m):
+        """Generates a QR code (Section 13C, from-scratch ISO/IEC 18004
+        encoder) for the given text/URL and saves it to disk."""
+        payload = m.group(1).strip().rstrip(".!? ") if m.group(1) else ""
+        if not payload:
+            return "What text or URL should the QR code encode?"
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_images")
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        output_path = os.path.join(output_dir, f"qr_{timestamp}.png")
+        return self.qr_generator.format_generate(payload, output_path)
+
+    def _handle_style_transfer(self, text, m):
+        """Neural style transfer (VGG19 + Gram-matrix loss, Section
+        12C) when TensorFlow/VGG19 weights are available, or a
+        classical histogram-matching fallback otherwise."""
+        content_path = m.group(1).strip().rstrip(".!? ")
+        style_path = m.group(2).strip().rstrip(".!? ")
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_images")
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        output_path = os.path.join(output_dir, f"styled_{timestamp}.png")
+        return self.style_transfer.format_transfer(content_path, style_path, output_path)
+
+    # ---- new external API handlers (Section 13) ----------------------------
+
+    def _handle_weather_lookup(self, text, m):
+        """Real current-weather lookup via Open-Meteo (Section 13,
+        WeatherAPIConnector) - two live HTTP calls (geocode + forecast).
+        Needs a network connection; fails closed with a plain-language
+        message if one isn't available."""
+        place = m.group(1).strip().rstrip("?.! ") if m.group(1) else ""
+        if not place:
+            return "Tell me a place - for example, 'weather in Nairobi'."
+        return self.weather_api.format_current_weather(place)
+
+    def _handle_weather_forecast(self, text, m):
+        """Multi-day forecast via the same WeatherAPIConnector,
+        strengthened alongside the rest of Section 13 to do more than
+        just current conditions."""
+        groups = m.groups()
+        if len(groups) == 2 and groups[0] and groups[0].isdigit():
+            days, place = int(groups[0]), groups[1]
+        else:
+            days, place = 3, groups[-1]
+        place = place.strip().rstrip("?.! ") if place else ""
+        if not place:
+            return "Tell me a place - for example, 'forecast for Nairobi' or '5 day forecast for Tokyo'."
+        return self.weather_api.format_forecast(place, days)
+
+    # A generic "N XXX to YYY" pattern (used to catch phrasings like
+    # "100 usd to eur" without requiring the word "convert") is
+    # inherently ambiguous with unit conversion whenever a unit
+    # abbreviation happens to also be exactly 3 letters (psi, bar, atm,
+    # ...). This whitelist disambiguates: only proceed as a CURRENCY
+    # conversion if both codes are recognized currencies; otherwise
+    # return None so the engine falls through to unit_convert instead
+    # of a currency-API error message that reads as a confusing typo.
+    COMMON_CURRENCY_CODES = {
+        "usd", "eur", "gbp", "jpy", "kes", "cad", "aud", "chf", "cny", "inr",
+        "zar", "ngn", "ghs", "ugx", "tzs", "rwf", "brl", "mxn", "sek", "nok",
+        "dkk", "pln", "try", "aed", "sar", "sgd", "hkd", "nzd", "krw", "thb",
+    }
+
+    def _handle_currency_convert(self, text, m):
+        """Real currency conversion via the Frankfurter/ECB-rates API
+        (Section 13, CurrencyExchangeConnector)."""
+        try:
+            amount = float(m.group(1))
+        except (ValueError, TypeError):
+            return "I couldn't read that amount - try something like 'convert 100 USD to EUR'."
+        from_currency = m.group(2)
+        to_currency = m.group(3)
+        if (from_currency.lower() not in self.COMMON_CURRENCY_CODES
+                or to_currency.lower() not in self.COMMON_CURRENCY_CODES):
+            return None  # not a recognized currency pair - let unit_convert (or others) try instead
+        return self.currency_api.format_conversion(amount, from_currency, to_currency)
+
+    def _handle_currency_history(self, text, m):
+        """Historical rate comparison via CurrencyExchangeConnector,
+        strengthened alongside the rest of Section 13 - answers
+        "has X strengthened/weakened", not just "what's it worth now"."""
+        from_currency, to_currency, days_ago = m.group(1), m.group(2), int(m.group(3))
+        if (from_currency.lower() not in self.COMMON_CURRENCY_CODES
+                or to_currency.lower() not in self.COMMON_CURRENCY_CODES):
+            return "I don't recognize one of those currency codes - try something like 'USD' or 'EUR'."
+        return self.currency_api.format_historical_comparison(1.0, from_currency, to_currency, days_ago)
+
+    def _handle_online_trivia(self, text, m):
+        """Fetches a fresh question from the Open Trivia Database
+        (Section 13, OnlineTriviaConnector), supplementing (not
+        replacing) FunExtras' offline TRIVIA bank. Falls back to the
+        offline bank automatically if the network call fails."""
+        result = self.online_trivia_api.format_question()
+        if "Couldn't reach" in result or "didn't return" in result:
+            lang = self.language_detector.detect(text)
+            offline = self.fun.random_trivia(lang)
+            return f"(Online trivia unavailable, here's one from my offline bank instead)\n\n{offline}"
+        return result
+
+    def _handle_trivia_categories(self, text, m):
+        """Lists the real category IDs from Open Trivia DB, since
+        fetch_question's category filter needs a numeric ID, not a
+        free-text name - added alongside the response_code bugfix in
+        OnlineTriviaConnector."""
+        return self.online_trivia_api.format_categories()
+
+    def _handle_semantic_search(self, text, m):
+        """
+        Searches the user's remembered facts (MemoryStore, Section 2)
+        by MEANING using SemanticMemoryIndex (Section 6H3, torch
+        contrastive embeddings when available, TF-IDF otherwise) -
+        rather than requiring the exact keyword to appear.
+        """
+        query = m.group(1).strip().rstrip("?.! ") if m.group(1) else ""
+        if not query:
+            return "What should I search your remembered facts for?"
+        facts = self.memory.all_facts()
+        if not facts:
+            return "You haven't told me anything to remember yet, so there's nothing to search."
+        items = [f"{key.replace('_', ' ')}: {value}" for key, value in facts.items()]
+        return self.semantic_memory.format_search(query, items, top_k=3)
+
+    def _handle_mood_forecast(self, text, m):
+        """
+        Forecasts where the conversation's mood is trending using
+        MoodTrendForecaster (Section 6H2, Keras LSTM when available).
+        Draws on self.recent_moods, which respond() appends to on every
+        turn (see the sentiment-tracking block in respond()).
+        """
+        return self.mood_forecaster.format_forecast(self.recent_moods)
+
+    def _call_llm_safely(self, user_text: str, system_prompt: str = None, use_rag: bool = True):
+        """
+        The recommended way to call the LLM from a handler: checks the
+        response cache first (Section 6I-EXT), checks the usage budget
+        before spending anything (Section 6I-EXT2), calls through, then
+        records usage and caches the result. Returns None on any
+        failure or budget block, same fail-closed contract as
+        LLMConnector.generate_reply() itself - callers should already
+        have an offline fallback ready either way.
+
+        use_rag=True (the default) folds relevant remembered facts
+        into the prompt first (RAGContextBuilder, Section 6I-EXT5) -
+        the cache key is the ORIGINAL user_text, not the RAG-augmented
+        version, so a cache hit still works correctly even though what
+        was actually sent to the model included extra context.
+        """
+        cached = self.llm_cache.get(system_prompt, user_text)
+        if cached is not None:
+            return cached
+        if self.llm_usage.would_exceed_budget(user_text):
+            return None
+        prompt_text = self.rag_context.build_augmented_prompt(user_text) if use_rag else user_text
+        reply = self.llm.generate_reply(prompt_text, system_prompt=system_prompt)
+        if reply is not None:
+            self.llm_usage.record_call(prompt_text, reply)
+            self.llm_cache.set(system_prompt, user_text, reply)
+        return reply
+
+    def _handle_rag_preview(self, text, m):
+        """Shows what RAGContextBuilder (Section 6I-EXT5) would
+        retrieve and inject for a given message, without calling the
+        LLM - transparency into what "grounding" an LLM reply would
+        actually be based on."""
+        query = m.group(1).strip() if m.group(1) else ""
+        if not query:
+            return "What message should I preview retrieval for?"
+        return self.rag_context.format_retrieval_preview(query)
+
+    def _handle_summarize_conversation(self, text, m):
+        """
+        Summarizes the session so far. Tries the real LLM first (if
+        configured - via _call_llm_safely, which adds caching and
+        usage tracking on top of Section 6I's LLMConnector), and falls
+        back to ExtractiveSummarizer's offline TF-IDF sentence ranking
+        if the LLM isn't available or the call fails - summarization
+        always has a working answer either way.
+        """
+        transcript = self.logger.recent_transcript_lines(limit=40)
+        if not transcript:
+            return "We haven't talked about much yet this session."
+
+        if self.llm.is_available():
+            joined_transcript = "\n".join(transcript[-40:])
+            prompt = PROMPT_TEMPLATES["summarize_conversation"]["user_template"].format(transcript=joined_transcript)
+            llm_summary = self._call_llm_safely(prompt, system_prompt=PROMPT_TEMPLATES["summarize_conversation"]["system"])
+            if llm_summary:
+                return llm_summary
+
+        joined = " ".join(transcript)
+        extractive = self.extractive_summarizer.summarize(joined, max_sentences=3)
+        return f"(offline summary - no LLM configured)\n{extractive}"
+
+    def _handle_llm_usage(self, text, m):
+        """Reports estimated LLM token/cost usage this session (Section
+        6I-EXT2) plus the response-cache hit rate (Section 6I-EXT)."""
+        return self.llm_usage.format_summary() + "\n\n" + self.llm_cache.stats()
+
+    def _handle_pii_check(self, text, m):
+        """Runs the PII pre-check (Section 6I-EXT3) against arbitrary
+        text before it would be sent to an external LLM - purely
+        informational, never blocks anything."""
+        target = m.group(1).strip() if m.group(1) else ""
+        if not target:
+            return "Give me some text to check - for example, 'check for pii: call me at 555-123-4567'."
+        warning = PIIScrubber.warning_for(target)
+        return warning or "That doesn't look like it contains anything obviously sensitive."
+
+    def _handle_news_headlines(self, text, m):
+        """Real top-headlines fetch via the Hacker News API (Section
+        13, NewsHeadlinesConnector) - needs no API key, just a network
+        connection."""
+        return self.news_api.format_headlines(limit=5)
+
+    def _handle_news_by_type(self, text, m):
+        """Story-type variety (best/new/ask/show, not just top) via the
+        same NewsHeadlinesConnector - added alongside the rest of
+        Section 13's strengthening pass."""
+        story_type = m.group(1).lower()
+        return self.news_api.format_headlines(limit=5, story_type=story_type)
+
+    def _handle_find_duplicate_facts(self, text, m):
+        """
+        Surfaces remembered facts that might be saying the same thing
+        in different words (SemanticMemoryIndex.find_near_duplicates,
+        Section 6H3) - e.g. "favorite_color: blue" and a separately-
+        remembered "likes: the color blue" - so the user can decide
+        whether to consolidate or forget one of them. Never deletes
+        anything automatically; this only surfaces candidates.
+        """
+        facts = self.memory.all_facts()
+        if len(facts) < 2:
+            return "You don't have enough remembered facts yet for duplicate-checking to be useful."
+        items = [f"{key.replace('_', ' ')}: {value}" for key, value in facts.items()]
+        return self.semantic_memory.format_near_duplicates(items, threshold=0.5)
+
+    def _handle_ml_backends_status(self, text, m):
+        """
+        A one-shot dashboard reporting which backend (real ML library
+        vs. offline heuristic fallback) is currently active for EVERY
+        model/connector in the file - useful after installing/removing
+        a dependency to confirm what actually changed, without having
+        to run 'nn stats', 'llm status', etc. separately for each one.
+        """
+        lines = ["ML / CV / API BACKENDS", ""]
+
+        lines.append("Neural networks:")
+        lines.append(f"  Intent classifier:      {self.nn_intent.backend}")
+        lines.append(f"  Sentiment classifier:   {self.sentiment_clf.backend}")
+        lines.append(f"  Suggestion engine:      {self.smart_suggestions.backend}")
+        lines.append(f"  Mood-trend forecaster:  {self.mood_forecaster.backend}")
+        lines.append(f"  Semantic memory search: {self.semantic_memory.backend}")
+        lines.append(f"  Urgency classifier:     {self.urgency_classifier.backend}")
+        lines.append(f"  Politeness classifier:  {self.politeness_classifier.backend}")
+        lines.append(f"  Question-type classif.: {self.question_type_classifier.backend}")
+        lines.append(f"  Text-complexity (regr): {self.text_complexity_regressor.backend}")
+        lines.append(f"  Emoji predictor:        {self.emoji_predictor.backend}")
+        lines.append(f"  Shape classifier:       {self.shape_classifier.backend}")
+        lines.append(f"  Image generator (CNN):  {self.image_generator.backend}")
+        if self.image_generator.backend == "keras" and self.image_generator.last_training_info:
+            param_count = self.image_generator.last_training_info.get("total_parameters")
+            if param_count:
+                lines.append(f"    (~{param_count:,} parameters, Conv2DTranspose decoder)")
+        lines.append(f"  Next-word predictor:    {self.transformer_lm.backend}")
+        if self.transformer_lm.backend == "transformer" and self.transformer_lm.last_training_info:
+            param_count = self.transformer_lm.last_training_info.get("total_parameters")
+            if param_count:
+                lines.append(f"    (~{param_count:,} parameters, self-attention)")
+        lines.append(f"  Style transfer:         {self.style_transfer.backend}")
+        lines.append("")
+
+        lines.append("Computer vision:")
+        lines.append(f"  OpenCV installed:       {OPENCV_AVAILABLE}")
+        lines.append(f"  Pillow installed:       {PILLOW_AVAILABLE}")
+        lines.append("")
+
+        lines.append("LLM hybrid:")
+        lines.append(f"  Configured/enabled:     {self.llm.is_available()}")
+        if self.llm.is_available():
+            lines.append(f"  Provider:               {self.llm.config.get('provider', 'unknown')}")
+        lines.append("")
+
+        lines.append("External APIs (network required, all fail closed):")
+        lines.append("  Weather (Open-Meteo):        no key needed")
+        lines.append("  Currency (Frankfurter/ECB):  no key needed")
+        lines.append("  Trivia (Open Trivia DB):     no key needed")
+        lines.append("  News (Hacker News):          no key needed")
+        lines.append(f"  Translation (LibreTranslate): {'enabled' if self.translation_api.is_available() else 'not configured'}")
+
+        return "\n".join(lines)
+
+    def _handle_run_accuracy_test(self, text, m):
+        """Runs the real intent-accuracy test harness (Section 15)
+        against this bot's actual matching pipeline and reports a
+        genuine hit rate plus every miss."""
+        result = run_accuracy_test(self, verbose=False)
+        lines = [f"Accuracy test: {result['hits']}/{result['total']} ({result['hit_rate']:.0%})"]
+        if result["misses"]:
+            lines.append("Misses:")
+            for message, expected, got in result["misses"]:
+                lines.append(f"  '{message}': expected '{expected}', matched '{got}'")
+        return "\n".join(lines)
+
+    def _handle_scan_typo_collisions(self, text, m):
+        """Scans COMMON_WORDS for edit-distance-1 collision pairs
+        (Section 15) - the same class of bug found by accident several
+        times during development (blur/blue, world/would, back/black,
+        test/text)."""
+        collisions = scan_for_typo_collisions()
+        return format_typo_collision_report(collisions)
+
+    def _handle_define_word(self, text, m):
+        """Real dictionary lookup via the Free Dictionary API (Section
+        13, DictionaryAPIConnector) - needs no API key, just network."""
+        word = m.group(1).strip() if m.group(1) else ""
+        if not word:
+            return "What word would you like me to define?"
+        return self.dictionary_api.format_definition(word)
+
+    def _handle_image_text_regions(self, text, m):
+        """MSER-based text-region detection (OpenCV, Section 12) - a
+        quick 'does this look like it has text' signal, not OCR."""
+        filepath = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not filepath:
+            return "Give me a file path - for example, 'detect text in: /path/to/photo.jpg'."
+        return self.image_analyzer.format_text_region_report(filepath)
+
+    def _handle_visualize_memory_embeddings(self, text, m):
+        """
+        Projects the user's remembered facts into a 2D PCA plot of the
+        learned semantic embedding space (SemanticMemoryIndex, Section
+        6H3) - a text-only "plot" (coordinate list), since this is a
+        terminal/text chatbot, but the same projection a real scatter
+        plot would use.
+        """
+        facts = self.memory.all_facts()
+        if len(facts) < 2:
+            return "I need at least 2 remembered facts to visualize an embedding space."
+        items = [f"{key.replace('_', ' ')}: {value}" for key, value in facts.items()]
+        return self.semantic_memory.format_2d_projection(items)
+
+    def _handle_blur_faces(self, text, m):
+        """Face detection + Gaussian blur privacy redaction (OpenCV,
+        Section 12) - saves alongside the original with a '_blurred'
+        suffix."""
+        filepath = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not filepath:
+            return "Give me a file path - for example, 'blur faces in: /path/to/photo.jpg'."
+        base, ext = os.path.splitext(filepath)
+        output_path = f"{base}_blurred{ext or '.png'}"
+        return self.image_analyzer.format_blur_faces(filepath, output_path)
+
+    def _handle_tool_call_demo(self, text, m):
+        """Runs the offline LLM tool-calling demo (Section 13B,
+        run_tool_call_demo) so the plumbing can be inspected without
+        needing a live LLM connection."""
+        return run_tool_call_demo(self)
+
+    def _handle_predict_next_word(self, text, m):
+        """Self-attention transformer prediction when torch is
+        available (Section 14B), rule-based trigram/bigram/unigram
+        backoff otherwise (Section 14) - see TransformerLanguageModel,
+        which picks the right one automatically."""
+        context = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not context:
+            return "Give me some text to predict after - for example, 'predict next word after: how are'."
+        return self.transformer_lm.format_prediction(context)
+
+    def _handle_continue_text(self, text, m):
+        """Autoregressive self-attention generation when torch is
+        available (Section 14B), rule-based trigram sampling otherwise
+        (Section 14) - same model selection as predict_next_word."""
+        seed = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        return self.transformer_lm.format_continuation(seed)
+
+    def _handle_discuss_topic_request(self, text, m):
+        """
+        Powers the generic 'let's talk about X' launcher (Section 7) for
+        ANY topic name, not just a fixed list hardcoded into a regex.
+        Normalizes the captured topic name, looks it up in
+        TOPIC_LAUNCHER_ALIASES (Section 8B) to find the matching
+        internal topic key, then dispatches through the SAME
+        _handle_keyword_topic() the flexible KeywordTopicMatcher already
+        uses - so "let's talk about anxiety" gets exactly the same
+        response quality as if "anxiety" had naturally appeared in a
+        longer sentence and been caught by the keyword matcher.
+
+        If the named topic isn't recognized, says so honestly rather
+        than guessing or silently falling back to something unrelated.
+        """
+        raw_topic = m.group(1).strip().rstrip(".!?") if m.group(1) else ""
+        if not raw_topic:
+            return "Sure - what would you like to talk about?"
+
+        # Normalize: lowercase, strip a leading article, collapse
+        # internal whitespace, and also try a simple singular form (so
+        # "dates" and "date" both resolve the same way without needing
+        # two separate dictionary entries for every single topic).
+        normalized = re.sub(r"\s+", " ", raw_topic.lower()).strip()
+        normalized = re.sub(r"^(the|a|an|my|some)\s+", "", normalized)
+
+        topic_key = TOPIC_LAUNCHER_ALIASES.get(normalized)
+        if topic_key is None and normalized.endswith("s"):
+            topic_key = TOPIC_LAUNCHER_ALIASES.get(normalized[:-1])
+
+        if topic_key is None:
+            return (f"I don't have a specific topic for '{raw_topic}' yet, but feel free to "
+                     f"just start talking about it and I'll do my best to follow along. "
+                     f"Or try 'help' to see what I'm built to talk about.")
+
+        lang = self.language_detector.detect(text)
+        response = self._handle_keyword_topic(topic_key, lang, text)
+        if response is not None:
+            return response
+
+        # The alias pointed at a real topic key, but _handle_keyword_topic
+        # doesn't have simple-bank or special-case handling wired up for
+        # it (this can legitimately happen for topics that only exist to
+        # be caught incidentally inside a longer sentence) - fail
+        # honestly rather than returning nothing.
+        return (f"I recognize '{raw_topic}' as a topic, but I don't have a good way to "
+                f"start that conversation directly yet - try mentioning it more naturally "
+                f"in a sentence instead.")
+
+    # ---- top-level response function -----------------------------------
+
+    def _confidence_phrase(self, confidence: float) -> str:
+        """Turns a raw softmax/predict_proba confidence into a natural phrase."""
+        if confidence >= 0.85:
+            return "pretty sure"
+        if confidence >= 0.65:
+            return "fairly confident"
+        if confidence >= 0.50:
+            return "somewhat confident"
+        return "only guessing, but I think"
+
+    def respond(self, user_text: str) -> str:
+        """
+        Public entry point. Delegates to _respond_core() for the actual
+        answer, then - separately - asks SmartSuggestionEngine (Section
+        6H) what the user might plausibly want to ask next, given
+        whichever intent ended up being matched this turn, and appends
+        it as a soft suggestion. This keeps the suggestion logic in ONE
+        place rather than repeated in every branch of the core response
+        logic above.
+        """
+        self.engine.last_matched_intent = None
+        # Tracks the most recent NON-meta-command message, for the
+        # 'compare models' command - updated whenever the CURRENT
+        # message itself isn't a meta/tooling command, so a meta-command
+        # turn (retrain, nn stats, compare models itself) never overwrites
+        # it, and 'compare models' always reflects real content.
+        META_COMMAND_NAMES = {"correct_intent", "retrain_nn", "nn_stats", "compare_models",
+                               "llm_status", "llm_clear_history", "db_stats", "change_llm_provider",
+                               "system_status", "analyze_image", "classify_shape",
+                               "discuss_topic_request"}
+        corrected_for_tracking = self.typo_corrector.correct_text(user_text.strip())
+        core_response = self._respond_core(user_text)
+
+        if self.engine.last_matched_intent not in META_COMMAND_NAMES:
+            self.previous_user_message = corrected_for_tracking
+
+        matched_label = self.engine.last_matched_intent or (
+            self.last_nn_prediction[1] if self.last_nn_prediction else None
+        )
+        self.topic_tracker.record(matched_label)
+        if matched_label:
+            phrasings = self.smart_suggestions.suggest_phrasing(matched_label, top_k=1)
+            if phrasings:
+                core_response = f"{core_response}\n\n(You might also want to {phrasings[0]}.)"
+
+        return core_response
+
+    def _respond_core(self, user_text: str) -> str:
+        user_text = user_text.strip()
+        if not user_text:
+            return "I didn't catch that - could you say something?"
+
+        # If there's an active hangman game, treat bare single letters as
+        # letter guesses even without the word 'guess' (more natural play).
+        # This check happens BEFORE typo correction since a single letter
+        # should never be "corrected" into something else.
+        if self.hangman.active and len(user_text) == 1 and user_text.isalpha():
+            message, game_over, won = self.hangman.guess_letter(user_text)
+            return message
+
+        # If a real-photo request (Section 13, RealPhotoConnector) is
+        # awaiting a yes/no answer about going online, THIS message is
+        # that answer - handle it here, before typo correction/intent
+        # matching, so a bare "yes"/"no" never gets misrouted into some
+        # unrelated intent instead.
+        if self._pending_real_photo is not None:
+            return self._resolve_pending_real_photo(user_text)
+
+        # Correct common fast-typing mistakes (e.g. "tge" -> "the") before
+        # any pattern matching happens, so an otherwise-recognizable
+        # message doesn't fall through to "I don't understand" just
+        # because of a typo. We keep the ORIGINAL text too (user_text)
+        # for anything that should reflect exactly what the person typed
+        # (like riddle/trivia answer text), while the corrected version
+        # (corrected_text) feeds the matching engines below.
+        corrected_text = self.typo_corrector.correct_text(user_text)
+        # Some new handlers (cipher tools, markdown table, ascii banner)
+        # transform the user's payload verbatim - typo "correction" is
+        # actively harmful there (e.g. turning "Ada" into "Add" in a
+        # table cell). Stash the untouched original alongside it so
+        # those handlers can re-extract their payload from THIS instead
+        # of from the corrected text the intent engine matched against.
+        self._current_raw_text = user_text
+
+        # Run the SENTIMENT classifier (separate network from the intent
+        # classifier above) on every turn, purely to track mood for
+        # tone-adaptation and the 'compare models' command - this does
+        # NOT influence which handler runs, only how some responses are
+        # phrased (see the negative-sentiment softening below).
+        self.last_sentiment = self.sentiment_clf.predict(corrected_text)
+        if self.last_sentiment:
+            mood_label = self.last_sentiment[0]
+            self.recent_moods.append(mood_label)
+            # Cap the window well above what MoodTrendForecaster actually
+            # looks at, so a long session doesn't grow this unboundedly.
+            if len(self.recent_moods) > 30:
+                self.recent_moods = self.recent_moods[-30:]
+
+        # AdaptiveToneTracker (Section 6D4) - rule-based, on the RAW
+        # user text (not the typo-corrected version), since casual
+        # markers like repeated letters or contractions are exactly
+        # the kind of thing typo-correction might otherwise smooth over.
+        self.tone_tracker.score_message(user_text)
+
+        # Check active riddle/trivia state before the regular intent engine,
+        # so a plain-text answer like "an echo" gets checked as a guess
+        # rather than falling through to the unknown-response catch-all.
+        riddle_result = self.fun.check_riddle_guess(user_text)
+        if riddle_result is not None:
+            is_correct, answer = riddle_result
+            if is_correct:
+                return f"That's right! The answer was '{answer}'. Nice work!"
+            # Not correct - let the normal intent engine try first (in case
+            # the user is asking for something else entirely), then fall
+            # back to a "not quite" message if nothing else matches either.
+            engine_response = self.engine.handle(corrected_text, self)
+            if engine_response is not None:
+                return engine_response
+            return "Not quite - want to try again, or say 'reveal the riddle answer'?"
+
+        trivia_result = self.fun.check_trivia_guess(user_text)
+        if trivia_result is not None:
+            is_correct, answer = trivia_result
+            if is_correct:
+                return f"Correct! The answer is {answer}. Great job!"
+            engine_response = self.engine.handle(corrected_text, self)
+            if engine_response is not None:
+                return engine_response
+            return f"Not quite. Want to try again, or ask for another trivia question?"
+
+        flashcard_result = self.flashcards.answer(user_text)
+        if flashcard_result is not None:
+            is_correct, answer = flashcard_result
+            if is_correct:
+                return f"Correct! That card moves up a box. The answer was: {answer}"
+            engine_response = self.engine.handle(corrected_text, self)
+            if engine_response is not None:
+                return engine_response
+            return f"Not quite - the answer was: {answer}. That card goes back to box 1."
+
+        response = self.engine.handle(corrected_text, self)
+        if response is not None:
+            return response
+
+        # Nothing matched the strict IntentEngine - try the more FLEXIBLE
+        # keyword/topic matcher next. This recognizes topic keywords
+        # anywhere in the sentence, in English, Swahili, or French, and
+        # routes to the matching trilingual response bank or handler.
+        topic, lang = self.keyword_matcher.find_topic(corrected_text)
+        if topic is not None:
+            topic_response = self._handle_keyword_topic(topic, lang, corrected_text)
+            if topic_response is not None:
+                return topic_response
+
+        # Still nothing - try the NEURAL INTENT CLASSIFIER (see
+        # NeuralIntentClassifier, Section 6G). Unlike the keyword matcher
+        # above, this is a genuinely trained neural network: its guess
+        # comes from learned weights over a TF-IDF feature vector, not
+        # from a fixed rule. For labels where the matched intent needs no
+        # extracted parameter (a joke, the time, the to-do list, etc.),
+        # a confident-enough prediction is dispatched directly to the
+        # real handler. For labels that DO need an extracted parameter
+        # (e.g. remembering a fact, renaming the bot) we only suggest the
+        # exact phrasing, since the NN's guess has no parameter to give
+        # the handler safely.
+        nn_result = self.nn_intent.predict(corrected_text)
+        if nn_result is not None:
+            label, confidence = nn_result
+            self.last_nn_prediction = (corrected_text, label)
+
+            handler = self._NN_AUTO_DISPATCH_LABELS.get(label)
+            if handler is not None:
+                dispatched = handler(self, corrected_text, None)
+                if dispatched is not None:
+                    return dispatched
+
+            bank = self._NN_RESPONSE_BANK_LABELS.get(label)
+            if bank is not None:
+                return random.choice(bank["en"])
+
+            # Only commit to a hedgy "I think you might want to X" guess
+            # immediately if confidence is reasonably high. Below that,
+            # try the LLM hybrid FIRST (if available) before settling
+            # for a weak guess - a real understanding attempt beats a
+            # coin-flip-ish label when one's available. See the LLM
+            # block below for the exact same call; if it's unavailable
+            # or fails, we fall through to the hedge message afterward.
+            phrasing = self._NN_LABEL_PHRASING.get(label)
+            if phrasing is not None and confidence >= 0.65:
+                confidence_phrase = self._confidence_phrase(confidence)
+                return (f"I'm {confidence_phrase} ({confidence:.0%} confident) that you "
+                         f"want to {phrasing}. Feel free to rephrase, or say "
+                         f"\"no, i meant ...\" if I guessed wrong so I can learn from it.")
+
+        # Still nothing confident enough - try the original TF-IDF
+        # similarity matcher (see SimilarityMatcher) too, in case the
+        # neural net's vocabulary doesn't cover this phrasing yet, but
+        # again only commit to it immediately at a fairly high bar.
+        suggestion = self.similarity_matcher.best_match(corrected_text, threshold=0.55)
+        if suggestion is not None:
+            suggestion_text, label, score = suggestion
+            self.last_nn_prediction = (corrected_text, label)
+            if score >= 0.70:
+                return (f"I'm not sure I understood that exactly, but did you mean to "
+                         f"{suggestion_text}? Feel free to rephrase, or type 'help' "
+                         f"to see everything I can do.")
+
+        # Nothing matched confidently. Before settling for a weak/hedgy
+        # guess or a generic "I don't understand", try the LLM hybrid
+        # (see LLMConnector, Section 6I) if the user has opted in. This
+        # is the ONLY point in the whole response pipeline that can
+        # generate a genuinely NEW reply rather than select one from a
+        # fixed list - everything above this (regex engine, keyword
+        # matcher, both neural classifiers, TF-IDF similarity) can only
+        # recognize and route, never originate language. If the LLM
+        # isn't configured, isn't enabled, or the call fails for any
+        # reason, generate_reply() returns None immediately and we fall
+        # through to the weak guess (if any) or the generic response -
+        # this never blocks or crashes regardless of network/config state.
+        llm_reply = self.llm.generate_reply(
+            corrected_text,
+            system_prompt=(
+                "You are a small fallback brain bolted onto an otherwise "
+                "fully offline, rule-based chatbot. You only get called "
+                "when the bot's regex rules and trained classifiers found "
+                "no confident match. Reply naturally and conversationally, "
+                "in 1-3 sentences - this isn't a place for long essays. "
+                "Don't mention that you're an LLM fallback or explain your "
+                "own architecture unless directly asked."
+            ),
+        )
+        if llm_reply is not None:
+            return llm_reply
+
+        # LLM unavailable/disabled/failed. Fall back to whatever weak
+        # guess we had, even below the normal confidence bar - a weak
+        # guess is still better than nothing once the better option
+        # (the LLM) has been tried and ruled out.
+        if nn_result is not None:
+            label, confidence = nn_result
+            phrasing = self._NN_LABEL_PHRASING.get(label)
+            if phrasing is not None:
+                confidence_phrase = self._confidence_phrase(confidence)
+                return (f"I'm {confidence_phrase} ({confidence:.0%} confident) that you "
+                         f"want to {phrasing}. Feel free to rephrase, or say "
+                         f"\"no, i meant ...\" if I guessed wrong so I can learn from it.")
+        if suggestion is not None:
+            suggestion_text, label, score = suggestion
+            return (f"I'm not sure I understood that exactly, but did you mean to "
+                     f"{suggestion_text}? Feel free to rephrase, or type 'help' "
+                     f"to see everything I can do.")
+
+        # Truly nothing matched, and the LLM hybrid is unavailable or
+        # disabled. If the SENTIMENT classifier picked up on negative
+        # mood this turn, soften the "I don't understand" reply rather
+        # than giving a flat/generic one - a small but real difference
+        # in feel that comes directly from having a second, independent
+        # network reading tone alongside the intent guesser.
+        if self.last_sentiment is not None and self.last_sentiment[0] == "negative":
+            return ("I didn't quite catch what you meant there, but it sounds like "
+                     "today might be a tough one. Want to try rephrasing, or just "
+                     "talk for a bit? I'm happy to listen either way.")
+
+        return random.choice(UNKNOWN_RESPONSES[lang])
+
+    def _handle_keyword_topic(self, topic: str, lang: str, user_text: str):
+        """
+        Dispatches a topic identified by the flexible KeywordTopicMatcher
+        to the appropriate response - either a trilingual smalltalk bank,
+        or (for topics that need real logic, like math or dates) a nudge
+        toward the precise phrasing the strict IntentEngine understands.
+        Returns None if the topic isn't actually handled here, so the
+        caller can fall through to the next fallback layer.
+        """
+        # Simple smalltalk topics: just pick a random trilingual reply.
+        simple_topic_banks = {
+            "weather_smalltalk": WEATHER_SMALLTALK_RESPONSES,
+            "feelings_happy": FEELINGS_HAPPY_RESPONSES,
+            "feelings_sad": FEELINGS_SAD_RESPONSES,
+            "feelings_tired": FEELINGS_TIRED_RESPONSES,
+            "gratitude": THANKS_RESPONSES,
+            "compliment_topic": COMPLIMENT_RESPONSES,
+            "greeting_topic": GREETING_RESPONSES,
+            "farewell_topic": FAREWELL_RESPONSES,
+            "food_hungry": FOOD_HUNGRY_RESPONSES,
+            "food_thirsty": FOOD_THIRSTY_RESPONSES,
+            "hobbies_topic": HOBBIES_RESPONSES,
+            "family_topic": FAMILY_RESPONSES,
+            "work_school_topic": WORK_SCHOOL_RESPONSES,
+            "agreement_topic": AGREEMENT_RESPONSES,
+            "disagreement_topic": DISAGREEMENT_RESPONSES,
+            "apology_topic": APOLOGY_RESPONSES,
+            "boredom_topic": BOREDOM_RESPONSES,
+            "love_relationships_topic": LOVE_RELATIONSHIPS_RESPONSES,
+            "music_topic": MUSIC_RESPONSES,
+            "sports_topic": SPORTS_RESPONSES,
+            "books_topic": BOOKS_RESPONSES,
+            "technology_topic": TECHNOLOGY_RESPONSES,
+            "pets_animals_topic": PETS_ANIMALS_RESPONSES,
+            "travel_topic": TRAVEL_RESPONSES,
+            "health_topic": HEALTH_RESPONSES,
+            "money_topic": MONEY_RESPONSES,
+            "birthday_topic": BIRTHDAY_RESPONSES,
+            "confusion_topic": CONFUSION_RESPONSES,
+            "encouragement_topic": ENCOURAGEMENT_RESPONSES,
+            "congratulations_topic": CONGRATULATIONS_RESPONSES,
+            "surprise_topic": SURPRISE_RESPONSES,
+            "small_request_topic": SMALL_REQUEST_RESPONSES,
+            "bot_identity_curiosity": BOT_IDENTITY_CURIOSITY_RESPONSES,
+            "goodnight_topic": GOODNIGHT_RESPONSES,
+            "good_morning_topic": GOOD_MORNING_RESPONSES,
+            "good_evening_topic": GOOD_EVENING_RESPONSES,
+            "weekend_topic": WEEKEND_RESPONSES,
+            "weather_cold_topic": WEATHER_COLD_RESPONSES,
+            "weather_hot_topic": WEATHER_HOT_RESPONSES,
+            "weather_rain_topic": WEATHER_RAIN_RESPONSES,
+            "weather_snow_topic": WEATHER_SNOW_RESPONSES,
+            "weather_windy_topic": WEATHER_WINDY_RESPONSES,
+            "holiday_smalltalk": HOLIDAY_SMALLTALK_RESPONSES,
+            "learning_topic": LEARNING_RESPONSES,
+            "motivation_goals_topic": MOTIVATION_GOALS_RESPONSES,
+            "nostalgia_topic": NOSTALGIA_RESPONSES,
+            "future_plans_topic": FUTURE_PLANS_RESPONSES,
+            "gaming_topic": GAMING_RESPONSES,
+            "cooking_topic": COOKING_RESPONSES,
+            "nature_outdoors_topic": NATURE_OUTDOORS_RESPONSES,
+            "sleep_dreams_topic": SLEEP_DREAMS_RESPONSES,
+            "humor_appreciation_topic": HUMOR_APPRECIATION_RESPONSES,
+            "skepticism_topic": SKEPTICISM_RESPONSES,
+            "filler_acknowledgement_topic": FILLER_ACKNOWLEDGEMENT_RESPONSES,
+            "opinion_request_topic": OPINION_REQUEST_RESPONSES,
+            "advice_request_topic": ADVICE_REQUEST_RESPONSES,
+            "comparison_topic": COMPARISON_RESPONSES,
+            "feelings_angry_topic": FEELINGS_ANGRY_RESPONSES,
+            "feelings_nervous_topic": FEELINGS_NERVOUS_RESPONSES,
+            "anxiety_topic": ANXIETY_RESPONSES,
+            "feelings_lonely_topic": FEELINGS_LONELY_RESPONSES,
+            "feelings_proud_topic": FEELINGS_PROUD_RESPONSES,
+            "feelings_jealous_topic": FEELINGS_JEALOUS_RESPONSES,
+            "feelings_relieved_topic": FEELINGS_RELIEVED_RESPONSES,
+            "bot_capability_curiosity_topic": BOT_CAPABILITY_CURIOSITY_RESPONSES,
+            "small_talk_weather_check_topic": SMALL_TALK_WEATHER_CHECK_RESPONSES,
+            "introduction_request_topic": INTRODUCTION_REQUEST_RESPONSES,
+            "small_talk_busy_topic": SMALL_TALK_BUSY_RESPONSES,
+            "politeness_please_topic": POLITENESS_PLEASE_RESPONSES,
+            "exercise_fitness_topic": EXERCISE_FITNESS_RESPONSES,
+            "mental_health_checkin_topic": MENTAL_HEALTH_CHECKIN_RESPONSES,
+            "gratitude_for_bot_topic": GRATITUDE_FOR_BOT_RESPONSES,
+            "repeat_clarify_topic": REPEAT_CLARIFY_RESPONSES,
+            "small_celebration_topic": SMALL_CELEBRATION_RESPONSES,
+            "forecast_question_topic": FORECAST_QUESTION_RESPONSES,
+            "language_practice_topic": LANGUAGE_PRACTICE_RESPONSES,
+            "bot_age_location_topic": BOT_AGE_LOCATION_RESPONSES,
+            "bot_name_opinion_topic": BOT_NAME_OPINION_RESPONSES,
+            "slow_down_topic": SLOW_DOWN_RESPONSES,
+            "awkward_pause_topic": AWKWARD_PAUSE_RESPONSES,
+            "compliment_response_topic": COMPLIMENT_RESPONSE_RESPONSES,
+            "remember_specific_topic": REMEMBER_SPECIFIC_RESPONSES,
+            "today_plans_topic": TODAY_PLANS_RESPONSES,
+            "technology_complaint_topic": TECHNOLOGY_COMPLAINT_RESPONSES,
+            "aspirations_dreams_topic": ASPIRATIONS_DREAMS_RESPONSES,
+            "missing_someone_topic": MISSING_SOMEONE_RESPONSES,
+            "excitement_event_topic": EXCITEMENT_EVENT_RESPONSES,
+            "disappointment_topic": DISAPPOINTMENT_RESPONSES,
+            "chat_meta_topic": CHAT_META_RESPONSES,
+            "season_spring_topic": SEASON_SPRING_RESPONSES,
+            "season_summer_topic": SEASON_SUMMER_RESPONSES,
+            "season_autumn_topic": SEASON_AUTUMN_RESPONSES,
+            "season_winter_topic": SEASON_WINTER_RESPONSES,
+            "nightmare_topic": NIGHTMARE_RESPONSES,
+            "traffic_topic": TRAFFIC_RESPONSES,
+            "news_topic": NEWS_RESPONSES,
+            "color_preference_topic": COLOR_PREFERENCE_RESPONSES,
+            "studying_exam_topic": STUDYING_EXAM_RESPONSES,
+            "gardening_plants_topic": GARDENING_PLANTS_RESPONSES,
+            "shopping_topic": SHOPPING_RESPONSES,
+            "movies_tv_topic": MOVIES_TV_RESPONSES,
+            "coffee_tea_topic": COFFEE_TEA_RESPONSES,
+            "exam_results_topic": EXAM_RESULTS_RESPONSES,
+            "party_event_topic": PARTY_EVENT_RESPONSES,
+            "siblings_topic": SIBLINGS_RESPONSES,
+            "career_change_topic": CAREER_CHANGE_RESPONSES,
+            "volunteer_work_topic": VOLUNTEER_WORK_RESPONSES,
+            "spirituality_topic": SPIRITUALITY_RESPONSES,
+            "politics_deflect_topic": POLITICS_DEFLECT_RESPONSES,
+            "silence_filler_topic": SILENCE_FILLER_RESPONSES,
+            "directions_recommendation_topic": DIRECTIONS_RECOMMENDATION_RESPONSES,
+            "name_recognition_topic": NAME_RECOGNITION_RESPONSES,
+            "general_curiosity_topic": GENERAL_CURIOSITY_RESPONSES,
+            "laughter_topic": LAUGHTER_RESPONSES,
+            "crying_topic": CRYING_RESPONSES,
+            "mild_frustration_topic": MILD_FRUSTRATION_RESPONSES,
+            "bot_favorite_things_topic": BOT_FAVORITE_THINGS_RESPONSES,
+            "birds_fish_topic": BIRDS_FISH_RESPONSES,
+            "commute_transport_topic": COMMUTE_TRANSPORT_RESPONSES,
+            "allergies_topic": ALLERGIES_RESPONSES,
+            "diet_nutrition_topic": DIET_NUTRITION_RESPONSES,
+            "sleep_schedule_topic": SLEEP_SCHEDULE_RESPONSES,
+            "photography_art_topic": PHOTOGRAPHY_ART_RESPONSES,
+            "grammar_question_topic": GRAMMAR_QUESTION_RESPONSES,
+            "naming_things_topic": NAMING_THINGS_RESPONSES,
+            "weather_extreme_topic": WEATHER_EXTREME_RESPONSES,
+            "home_house_topic": HOME_HOUSE_RESPONSES,
+            "neighbors_topic": NEIGHBORS_RESPONSES,
+            "pet_loss_topic": PET_LOSS_RESPONSES,
+            "achievement_milestone_topic": ACHIEVEMENT_MILESTONE_RESPONSES,
+            "waiting_patience_topic": WAITING_PATIENCE_RESPONSES,
+            "positive_surprise_topic": POSITIVE_SURPRISE_RESPONSES,
+            "compliment_back_request_topic": COMPLIMENT_BACK_REQUEST_RESPONSES,
+            "deadline_topic": DEADLINE_RESPONSES,
+            "pregnancy_baby_topic": PREGNANCY_BABY_RESPONSES,
+            "wedding_engagement_topic": WEDDING_ENGAGEMENT_RESPONSES,
+            "graduation_topic": GRADUATION_RESPONSES,
+            "moving_city_topic": MOVING_CITY_RESPONSES,
+            "new_pet_topic": NEW_PET_RESPONSES,
+            "first_day_topic": FIRST_DAY_RESPONSES,
+            "reunion_topic": REUNION_RESPONSES,
+            "fluency_goals_topic": FLUENCY_GOALS_RESPONSES,
+            "cultural_traditions_topic": CULTURAL_TRADITIONS_RESPONSES,
+            "sustainability_topic": SUSTAINABILITY_RESPONSES,
+            "fun_fact_topic": FUN_FACT_RESPONSES,
+            "gift_thanks_topic": GIFT_THANKS_RESPONSES,
+            "running_late_topic": RUNNING_LATE_RESPONSES,
+            "time_management_topic": TIME_MANAGEMENT_RESPONSES,
+            "sports_victory_topic": SPORTS_VICTORY_RESPONSES,
+            "sports_loss_topic": SPORTS_LOSS_RESPONSES,
+            "unpredictable_weather_topic": UNPREDICTABLE_WEATHER_RESPONSES,
+            "new_year_resolution_topic": NEW_YEAR_RESOLUTION_RESPONSES,
+            "childhood_memory_topic": CHILDHOOD_MEMORY_RESPONSES,
+            "role_model_topic": ROLE_MODEL_RESPONSES,
+            "fear_phobia_topic": FEAR_PHOBIA_RESPONSES,
+            "dream_interpretation_topic": DREAM_INTERPRETATION_RESPONSES,
+            "self_improvement_topic": SELF_IMPROVEMENT_RESPONSES,
+            "social_media_topic": SOCIAL_MEDIA_RESPONSES,
+            "remote_work_topic": REMOTE_WORK_RESPONSES,
+            "job_interview_topic": JOB_INTERVIEW_RESPONSES,
+            "recipe_dish_topic": RECIPE_DISH_RESPONSES,
+            "insomnia_topic": INSOMNIA_RESPONSES,
+            "quitting_habit_topic": QUITTING_HABIT_RESPONSES,
+            "meditation_mindfulness_topic": MEDITATION_MINDFULNESS_RESPONSES,
+            "sibling_rivalry_topic": SIBLING_RIVALRY_RESPONSES,
+            "long_distance_relationship_topic": LONG_DISTANCE_RELATIONSHIP_RESPONSES,
+            "pet_peeve_topic": PET_PEEVE_RESPONSES,
+            "kindness_topic": KINDNESS_RESPONSES,
+            "procrastination_topic": PROCRASTINATION_RESPONSES,
+            "decluttering_topic": DECLUTTERING_RESPONSES,
+            "public_speaking_topic": PUBLIC_SPEAKING_RESPONSES,
+            "learning_to_drive_topic": LEARNING_TO_DRIVE_RESPONSES,
+            "retirement_planning_topic": RETIREMENT_PLANNING_RESPONSES,
+            "programming_coding_topic": PROGRAMMING_CODING_RESPONSES,
+            "gym_intimidation_topic": GYM_INTIMIDATION_RESPONSES,
+            "comfort_food_topic": COMFORT_FOOD_RESPONSES,
+            "singing_voice_topic": SINGING_VOICE_RESPONSES,
+            "journaling_topic": JOURNALING_RESPONSES,
+            "board_games_puzzles_topic": BOARD_GAMES_PUZZLES_RESPONSES,
+            "camping_outdoor_trip_topic": CAMPING_OUTDOOR_TRIP_RESPONSES,
+            "car_trouble_topic": CAR_TROUBLE_RESPONSES,
+            "roommates_topic": ROOMMATES_RESPONSES,
+            "online_dating_topic": ONLINE_DATING_RESPONSES,
+            "tattoos_piercings_topic": TATTOOS_PIERCINGS_RESPONSES,
+            "fashion_style_topic": FASHION_STYLE_RESPONSES,
+            "language_barrier_topic": LANGUAGE_BARRIER_RESPONSES,
+            "school_volunteering_topic": SCHOOL_VOLUNTEERING_RESPONSES,
+            "charity_donation_topic": CHARITY_DONATION_RESPONSES,
+            "hosting_guests_topic": HOSTING_GUESTS_RESPONSES,
+            "time_zones_topic": TIME_ZONES_RESPONSES,
+            "productivity_tools_topic": PRODUCTIVITY_TOOLS_RESPONSES,
+            "parenting_topic": PARENTING_RESPONSES,
+            "teenager_struggle_topic": TEENAGER_STRUGGLE_RESPONSES,
+            "elderly_parent_care_topic": ELDERLY_PARENT_CARE_RESPONSES,
+            "grief_loss_topic": GRIEF_LOSS_RESPONSES,
+            "therapy_counseling_topic": THERAPY_COUNSELING_RESPONSES,
+            "addiction_recovery_topic": ADDICTION_RECOVERY_RESPONSES,
+            "identity_coming_out_topic": IDENTITY_COMING_OUT_RESPONSES,
+            "immigration_topic": IMMIGRATION_RESPONSES,
+            "disability_accessibility_topic": DISABILITY_ACCESSIBILITY_RESPONSES,
+            "menstrual_health_topic": MENSTRUAL_HEALTH_RESPONSES,
+            "checkup_vaccine_topic": CHECKUP_VACCINE_RESPONSES,
+            "climate_anxiety_topic": CLIMATE_ANXIETY_RESPONSES,
+            "ai_technology_fear_topic": AI_TECHNOLOGY_FEAR_RESPONSES,
+            "remote_learning_topic": REMOTE_LEARNING_RESPONSES,
+            "hobby_club_topic": HOBBY_CLUB_RESPONSES,
+            "sneeze_hiccup_topic": SNEEZE_HICCUP_RESPONSES,
+            "handedness_topic": HANDEDNESS_RESPONSES,
+            "astrology_zodiac_topic": ASTROLOGY_ZODIAC_RESPONSES,
+            "personality_type_topic": PERSONALITY_TYPE_RESPONSES,
+            "lucky_superstition_topic": LUCKY_SUPERSTITION_RESPONSES,
+            "favorite_season_topic": FAVORITE_SEASON_RESPONSES,
+            "ideal_vacation_topic": IDEAL_VACATION_RESPONSES,
+            "first_impression_topic": FIRST_IMPRESSION_RESPONSES,
+            "bucket_list_topic": BUCKET_LIST_RESPONSES,
+            "give_compliment_to_bot_topic": GIVE_COMPLIMENT_TO_BOT_RESPONSES,
+            "conversation_starter_topic": CONVERSATION_STARTER_RESPONSES,
+            "conversational_filler_starter_topic": CONVERSATIONAL_FILLER_STARTER_RESPONSES,
+            "luck_fortune_topic": LUCK_FORTUNE_RESPONSES,
+            "relaxing_weekend_topic": RELAXING_WEEKEND_RESPONSES,
+            "proud_of_someone_topic": PROUD_OF_SOMEONE_RESPONSES,
+            "forgiveness_topic": FORGIVENESS_RESPONSES,
+            "mistake_learning_topic": MISTAKE_LEARNING_RESPONSES,
+            "trust_issues_topic": TRUST_ISSUES_RESPONSES,
+            "setting_boundaries_topic": SETTING_BOUNDARIES_RESPONSES,
+            "self_care_routine_topic": SELF_CARE_ROUTINE_RESPONSES,
+            "feeling_stuck_topic": FEELING_STUCK_RESPONSES,
+            "life_transition_topic": LIFE_TRANSITION_RESPONSES,
+            "hope_future_topic": HOPE_FUTURE_RESPONSES,
+            "gratitude_practice_topic": GRATITUDE_PRACTICE_RESPONSES,
+        }
+        if topic in simple_topic_banks:
+            bank = simple_topic_banks[topic]
+            if topic == "farewell_topic":
+                self.running = False
+            return random.choice(bank[lang])
+
+        if topic == "how_are_you_topic":
+            return HOW_ARE_YOU_TOPIC_PROMPT[lang]
+
+        # For request-able content (joke/quote/riddle/trivia/story/poem),
+        # we can usually just fulfill the request directly even with loose
+        # keyword matching, since there's no ambiguous parameter to fill.
+        if topic == "joke":
+            return self.fun.random_joke(lang)
+        if topic == "quote":
+            return self.fun.random_quote()
+        if topic == "riddle":
+            riddle = self.fun.random_riddle()
+            return f"{riddle}\n\n(Try to answer it, or say 'reveal the riddle answer' if you're stuck.)"
+        if topic == "trivia":
+            trivia = self.fun.random_trivia(lang)
+            return f"{trivia}\n\n(Answer with the letter or the full answer.)"
+        if topic == "story":
+            result = self.storyteller.random_story(user_name=self.user_name(), lang=lang)
+            if result is None:
+                return None
+            title, body = result
+            return f"📖 {title}\n\n{body}"
+        if topic == "poem":
+            poem = self.poet.rhyming_couplets(theme="general", num_couplets=2, lang=lang)
+            return f"Here's a poem:\n\n{poem}"
+        if topic == "hangman_topic":
+            intro = self.hangman.start("medium")
+            return f"Let's play Hangman! Guess a letter at a time (say 'guess X').\n\n{intro}"
+        if topic == "help_topic":
+            return self._handle_help(user_text, None)
+
+        # Topics where the exact value matters (time, date, age, math,
+        # to-do list) are too risky to answer from keywords alone, so we
+        # nudge toward the precise command in the detected language.
+        precise_nudges = {
+            "time_query": {
+                "en": "Looks like you're asking about the time - try 'what time is it'.",
+                "sw": "Inaonekana unauliza kuhusu saa - jaribu 'saa ngapi sasa'.",
+                "fr": "Il semble que tu demandes l'heure - essaie 'quelle heure est-il'.",
+            },
+            "date_query": {
+                "en": "Looks like you're asking about the date - try 'what's the date'.",
+                "sw": "Inaonekana unauliza kuhusu tarehe - jaribu 'tarehe gani leo'.",
+                "fr": "Il semble que tu demandes la date - essaie 'quelle est la date'.",
+            },
+            "math_topic": {
+                "en": "Looks like you want some math - try something like 'what is 4 + 5'.",
+                "sw": "Inaonekana unataka hesabu - jaribu kitu kama 'what is 4 + 5'.",
+                "fr": "Il semble que tu veuilles un calcul - essaie quelque chose comme 'what is 4 + 5'.",
+            },
+            "age_topic": {
+                "en": "Looks like you want an age calculated - try 'how old would I be if born on 2000-01-01'.",
+                "sw": "Inaonekana unataka kuhesabu umri - jaribu 'how old would I be if born on 2000-01-01'.",
+                "fr": "Il semble que tu veuilles calculer un âge - essaie 'how old would I be if born on 2000-01-01'.",
+            },
+            "todo_topic": {
+                "en": "Looks like you're thinking about your to-do list - try 'show my to-do list' or 'add ... to my to-do list'.",
+                "sw": "Inaonekana unafikiria orodha yako ya kazi - jaribu 'show my to-do list' au 'add ... to my to-do list'.",
+                "fr": "Il semble que tu penses à ta liste de tâches - essaie 'show my to-do list' ou 'add ... to my to-do list'.",
+            },
+        }
+        if topic in precise_nudges:
+            return precise_nudges[topic][lang]
+
+        return None
+
+
+# Populate the neural classifier's auto-dispatch table now that every
+# handler method above exists. Each entry maps an NN-predicted label to
+# the actual bound-style handler it triggers - these are exactly the
+# handlers verified (see Section 6G design notes) to NOT need a regex
+# match object, so calling them with m=None from the NN's prediction
+# (which has no regex groups) is safe.
+ChatBot._NN_RESPONSE_BANK_LABELS = {
+    "feelings_happy": FEELINGS_HAPPY_RESPONSES,
+    "feelings_sad": FEELINGS_SAD_RESPONSES,
+    "feelings_tired": FEELINGS_TIRED_RESPONSES,
+    "weather_smalltalk": WEATHER_SMALLTALK_RESPONSES,
+}
+
+ChatBot._NN_AUTO_DISPATCH_LABELS = {
+    "greeting": ChatBot._handle_greeting,
+    "farewell": ChatBot._handle_farewell,
+    "thanks": ChatBot._handle_thanks,
+    "how_are_you": ChatBot._handle_how_are_you,
+    "bot_capabilities_joke": ChatBot._handle_are_you_ai,
+    "ask_bot_name": ChatBot._handle_ask_bot_name,
+    "ask_my_name": ChatBot._handle_ask_my_name,
+    "current_time": ChatBot._handle_current_time,
+    "current_date": ChatBot._handle_current_date,
+    "tell_joke": ChatBot._handle_tell_joke,
+    "tell_quote": ChatBot._handle_tell_quote,
+    "tell_riddle": ChatBot._handle_tell_riddle,
+    "tell_trivia": ChatBot._handle_tell_trivia,
+    "todo_list": ChatBot._handle_todo_list,
+    "hangman_start": ChatBot._handle_hangman_start,
+    "help": ChatBot._handle_help,
+}
+
+
+# ==============================================================================
