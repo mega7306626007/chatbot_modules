@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10231f">
+  <title>PyChat | Your offline conversation space</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-row">
+        <div class="brand-mark" aria-hidden="true">P</div>
+        <div>
+          <p class="eyebrow">LOCAL ASSISTANT</p>
+          <h1>PyChat</h1>
+        </div>
+        <button class="icon-button mobile-close" type="button" aria-label="Close menu">&#10005;</button>
+      </div>
+
+      <button class="new-chat" id="new-chat" type="button"><span aria-hidden="true">+</span> New conversation</button>
+
+      <nav class="nav-list" aria-label="Main navigation">
+        <p class="nav-label">Workspace</p>
+        <button class="nav-item active" type="button"><span class="nav-icon" aria-hidden="true">&#9673;</span> Chat <span class="nav-count">1</span></button>
+        <button class="nav-item" type="button" data-command="show stats"><span class="nav-icon" aria-hidden="true">&#9636;</span> Memory</button>
+        <button class="nav-item" type="button" data-command="help"><span class="nav-icon" aria-hidden="true">?</span> Capabilities</button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="system-card">
+          <div class="status-line"><span class="status-dot"></span><span>Offline mode</span></div>
+          <p>Private by default. Your conversations stay on this device.</p>
+        </div>
+        <div class="profile-row">
+          <div class="avatar">Y</div>
+          <div><strong>Your workspace</strong><span>Personal assistant</span></div>
+          <button class="icon-button" type="button" aria-label="Workspace options">&#8942;</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="chat-panel">
+      <header class="topbar">
+        <button class="icon-button menu-toggle" type="button" aria-label="Open menu">&#9776;</button>
+        <div class="conversation-title">
+          <span class="bot-status"></span>
+          <div><strong>Everyday chat</strong><span>PyChat is ready</span></div>
+        </div>
+        <div class="topbar-actions">
+          <button class="icon-button" type="button" aria-label="Search conversation">&#8981;</button>
+          <button class="icon-button" id="clear-chat" type="button" aria-label="Clear conversation">&#10005;</button>
+        </div>
+      </header>
+
+      <section class="conversation" id="conversation" aria-live="polite">
+        <div class="welcome-block">
+          <div class="welcome-orbit"><span class="welcome-mark">P</span></div>
+          <p class="eyebrow">GOOD TO SEE YOU</p>
+          <h2>What shall we<br><em>figure out</em> today?</h2>
+          <p class="welcome-copy">Ask me anything, or try one of the starting points below.</p>
+        </div>
+
+        <div class="suggestions" aria-label="Suggested prompts">
+          <button class="suggestion" type="button" data-command="Tell me a joke"><span class="suggestion-icon">&#9733;</span><span>Make me laugh</span><small>Something light</small></button>
+          <button class="suggestion" type="button" data-command="What can you do?"><span class="suggestion-icon">&#10022;</span><span>Explore abilities</span><small>See what is possible</small></button>
+          <button class="suggestion" type="button" data-command="What time is it?"><span class="suggestion-icon">&#9716;</span><span>Check the time</span><small>A quick answer</small></button>
+        </div>
+      </section>
+
+      <footer class="composer-wrap">
+        <form class="composer" id="chat-form">
+          <button class="attach-button" type="button" aria-label="Add attachment">&#43;</button>
+          <input id="message-input" type="text" autocomplete="off" placeholder="Message PyChat..." aria-label="Message PyChat">
+          <span class="shortcut-hint">Enter to send</span>
+          <button class="send-button" type="submit" aria-label="Send message">&#8593;</button>
+        </form>
+        <p class="composer-note">PyChat can make mistakes. Check important information.</p>
+      </footer>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

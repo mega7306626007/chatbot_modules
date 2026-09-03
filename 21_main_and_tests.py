@@ -316,22 +316,11 @@ def run_self_test():
 
 
 if __name__ == "__main__":
-    if "--test" in sys.argv:
+    if "--web" in sys.argv:
+        run_web_server()
+    elif "--test" in sys.argv:
         run_self_test()
     elif "--text" in sys.argv:
         run_chat_loop()
-    elif "--gui" in sys.argv or KIVY_AVAILABLE:
-        # BUGFIX: this used to only launch the Kivy window when
-        # "--gui" was explicitly passed on the command line. Tapping
-        # Pydroid 3's plain Run button passes NO arguments at all, and
-        # there's no easy way to add one from the main editor screen -
-        # so in practice the graphical window was NEVER reachable this
-        # way, and every run silently fell through to the bare-bones
-        # text chat loop instead (which is also almost certainly why
-        # this seemed far simpler than everything actually built into
-        # it). Now: if Kivy is installed, the GUI opens BY DEFAULT with
-        # no flags needed. Pass --text explicitly if the plain terminal
-        # chat is what you actually want instead.
-        run_gui()
     else:
         run_chat_loop()

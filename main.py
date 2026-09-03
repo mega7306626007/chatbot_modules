@@ -22,8 +22,8 @@ silently break something. So instead, this loader execs every file, in
 the SAME order the original monolith defined things in, into one shared
 namespace - every existing cross-reference keeps working unmodified,
 while each file on disk is now small enough to open, scroll, and edit
-in Pydroid 3 without lag. Run with `python main.py`, `--test`, or
-`--gui` exactly as before.
+in Pydroid 3 without lag. Run with `python main.py`, `--text`, `--web`,
+or `--test`.
 """
 import os
 import sys
@@ -56,10 +56,10 @@ _MODULE_FILES = [
     "29_markdown_table.py",
     "30_countdown_dashboard.py",
     "31_word_games.py",
+    "33_web_server.py",
     # 13_response_banks_loader.py handled separately below (it loads a
     # whole subfolder, not a single file)
     "14_chatbot_core.py",
-    "15_gui_kivy.py",
     "16_vision.py",
     "17_api_connectors.py",
     "18_qr_code.py",

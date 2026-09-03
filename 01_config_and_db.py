@@ -298,28 +298,6 @@ import urllib.parse
 import sqlite3
 import contextlib
 
-# Kivy is OPTIONAL and powers the graphical chat window (Section 11,
-# bottom of file) - used when this file is run with `--gui`, or
-# double-tapped/run directly in Pydroid 3's GUI mode. Everything else
-# in this file (the CLI loop, --test mode) works with zero dependency
-# on Kivy at all; if it isn't installed, --gui prints a clear message
-# explaining how to install it instead of crashing with an
-# unintelligible ModuleNotFoundError.
-try:
-    from kivy.app import App
-    from kivy.uix.boxlayout import BoxLayout
-    from kivy.uix.scrollview import ScrollView
-    from kivy.uix.gridlayout import GridLayout
-    from kivy.uix.label import Label
-    from kivy.uix.textinput import TextInput
-    from kivy.uix.button import Button
-    from kivy.clock import Clock
-    from kivy.core.window import Window
-    from kivy.metrics import dp
-    KIVY_AVAILABLE = True
-except ImportError:
-    KIVY_AVAILABLE = False
-
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
