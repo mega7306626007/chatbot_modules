@@ -2,12 +2,13 @@
 
 import json
 import mimetypes
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
 
-WEB_HOST = "127.0.0.1"
-WEB_PORT = 8765
+WEB_HOST = os.environ.get("HOST", "127.0.0.1")
+WEB_PORT = int(os.environ.get("PORT", "8765"))
 WEB_FILES = {"/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/app.js": "app.js"}
 
 
