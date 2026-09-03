@@ -82,15 +82,15 @@ def run_web_server():
                 if not isinstance(message, str) or not message.strip():
                     raise ValueError("A non-empty message is required")
                 chatbot = get_bot()
-                before_qr_files = set(GENERATED_DIR.glob("qr_*.png"))
+                before_image_files = set(GENERATED_DIR.glob("*.png"))
                 chatbot.logger.log("user", message.strip())
                 reply = chatbot.respond(message.strip())
                 chatbot.logger.log("bot", reply)
-                after_qr_files = set(GENERATED_DIR.glob("qr_*.png"))
-                new_qr_files = after_qr_files - before_qr_files
+                after_image_files = set(GENERATED_DIR.glob("*.png"))
+                new_image_files = after_image_files - before_image_files
                 image_url = None
-                if new_qr_files:
-                    image_url = "/generated_images/" + max(new_qr_files, key=lambda path: path.stat().st_mtime_ns).name
+                if new_image_files:
+                    image_url = "/generated_images/" + max(new_image_files, key=lambda path: path.stat().st_mtime_ns).name
                 response = {"reply": reply, "bot_name": chatbot.bot_name()}
                 if image_url:
                     response["image_url"] = image_url

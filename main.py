@@ -57,6 +57,7 @@ _MODULE_FILES = [
     "30_countdown_dashboard.py",
     "31_word_games.py",
     "33_web_server.py",
+    "34_offline_scene_generator.py",
     # 13_response_banks_loader.py handled separately below (it loads a
     # whole subfolder, not a single file)
     "14_chatbot_core.py",
