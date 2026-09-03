@@ -14,7 +14,13 @@ WEB_FILES = {"/": "index.html", "/index.html": "index.html", "/styles.css": "sty
 
 def run_web_server():
     """Serve the web UI and route chat messages through the real ChatBot."""
-    bot = ChatBot()
+    bot = None
+
+    def get_bot():
+        nonlocal bot
+        if bot is None:
+            bot = ChatBot()
+        return bot
 
     class WebHandler(BaseHTTPRequestHandler):
         def _send(self, status, body, content_type):
@@ -62,10 +68,11 @@ def run_web_server():
                 message = payload.get("message", "")
                 if not isinstance(message, str) or not message.strip():
                     raise ValueError("A non-empty message is required")
-                bot.logger.log("user", message.strip())
-                reply = bot.respond(message.strip())
-                bot.logger.log("bot", reply)
-                self._send(200, json.dumps({"reply": reply, "bot_name": bot.bot_name()}), "application/json; charset=utf-8")
+                chatbot = get_bot()
+                chatbot.logger.log("user", message.strip())
+                reply = chatbot.respond(message.strip())
+                chatbot.logger.log("bot", reply)
+                self._send(200, json.dumps({"reply": reply, "bot_name": chatbot.bot_name()}), "application/json; charset=utf-8")
             except (ValueError, TypeError, json.JSONDecodeError) as error:
                 self._send(400, json.dumps({"error": str(error)}), "application/json; charset=utf-8")
             except Exception:
@@ -82,5 +89,6 @@ def run_web_server():
         print("\nStopping web interface...")
     finally:
         server.server_close()
-        bot.memory.save()
-        bot.logger.flush_to_disk()
+        if bot is not None:
+            bot.memory.save()
+            bot.logger.flush_to_disk()
