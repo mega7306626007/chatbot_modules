@@ -14,7 +14,7 @@ function addMessage(text, role, imageUrl = null) {
     const image = document.createElement('img');
     image.className = 'chat-image';
     image.src = imageUrl;
-    image.alt = 'Generated QR code';
+    image.alt = 'Generated image';
     bubble.appendChild(image);
     const download = document.createElement('a');
     download.className = 'image-download';

@@ -88,6 +88,7 @@ class ChatBot:
         # Inverse of shape_classifier: a CNN that GENERATES a shape
         # image instead of classifying one (Section 12B).
         self.image_generator = CNNImageGenerator()
+        self.scene_generator = OfflineSceneGenerator()
         # New in this revision: a torch contrastive sentence-embedding
         # search index (Section 6H3), a Keras LSTM mood-trend forecaster
         # (Section 6H2), and a small set of opt-in/no-key REST API
@@ -2791,6 +2792,13 @@ class ChatBot:
         output_path = os.path.join(output_dir, f"{color}_{shape}_{timestamp}.png")
         return self.image_generator.format_generate(shape, color, output_path)
 
+    def _handle_generate_scene(self, text):
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_images")
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        output_path = os.path.join(output_dir, f"background_{timestamp}.png")
+        return self.scene_generator.generate(text, output_path)
+
     def _handle_real_photo_request(self, text, m):
         """
         Step 1 of the REAL-photo path (Section 13, RealPhotoConnector)
@@ -3360,6 +3368,9 @@ class ChatBot:
         user_text = user_text.strip()
         if not user_text:
             return "I didn't catch that - could you say something?"
+
+        if any(keyword in user_text.lower() for keyword in ("background", "landscape", "scenery", "complex image")):
+            return self._handle_generate_scene(user_text)
 
         # If there's an active hangman game, treat bare single letters as
         # letter guesses even without the word 'guess' (more natural play).
