@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
 
-WEB_HOST = os.environ.get("HOST", "127.0.0.1")
+WEB_HOST = os.environ.get("HOST", "0.0.0.0")
 WEB_PORT = int(os.environ.get("PORT", "8765"))
 WEB_FILES = {"/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/app.js": "app.js"}
 
