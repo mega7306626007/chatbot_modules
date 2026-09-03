@@ -4,12 +4,25 @@ const conversation = document.querySelector('#conversation');
 const welcome = document.querySelector('.welcome-block');
 const suggestions = document.querySelector('.suggestions');
 
-function addMessage(text, role) {
+function addMessage(text, role, imageUrl = null) {
   const message = document.createElement('div');
   message.className = `message ${role}`;
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
   bubble.textContent = text;
+  if (imageUrl) {
+    const image = document.createElement('img');
+    image.className = 'chat-image';
+    image.src = imageUrl;
+    image.alt = 'Generated QR code';
+    bubble.appendChild(image);
+    const download = document.createElement('a');
+    download.className = 'image-download';
+    download.href = imageUrl;
+    download.download = 'pychat-qr-code.png';
+    download.textContent = 'Download image';
+    bubble.appendChild(download);
+  }
   message.appendChild(bubble);
   conversation.appendChild(message);
   conversation.scrollTop = conversation.scrollHeight;
@@ -38,7 +51,7 @@ async function sendMessage(text) {
       throw new Error(responseText || `The server returned an empty response (HTTP ${response.status}).`);
     }
     if (!response.ok) throw new Error(payload.error || 'Request failed');
-    addMessage(payload.reply, 'bot');
+    addMessage(payload.reply, 'bot', payload.image_url);
   } catch (error) {
     addMessage(`I could not reach the Python chatbot. Start it with "python main.py --web" and try again. (${error.message})`, 'bot');
   }

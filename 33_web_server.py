@@ -3,6 +3,7 @@
 import json
 import mimetypes
 import os
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
@@ -10,6 +11,7 @@ from urllib.parse import urlparse
 WEB_HOST = os.environ.get("HOST", "0.0.0.0")
 WEB_PORT = int(os.environ.get("PORT", "8765"))
 WEB_FILES = {"/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/app.js": "app.js"}
+GENERATED_DIR = Path(__file__).resolve().parent / "generated_images"
 
 
 def run_web_server():
@@ -43,6 +45,17 @@ def run_web_server():
 
         def do_GET(self):
             path = urlparse(self.path).path
+            if path.startswith("/generated_images/"):
+                image_name = Path(path.removeprefix("/generated_images/")).name
+                image_path = GENERATED_DIR / image_name
+                if image_path.parent != GENERATED_DIR or image_path.suffix.lower() != ".png":
+                    self._send(404, "Not found", "text/plain; charset=utf-8")
+                    return
+                try:
+                    self._send(200, image_path.read_bytes(), "image/png")
+                except OSError:
+                    self._send(404, "Image not found", "text/plain; charset=utf-8")
+                return
             filename = WEB_FILES.get(path)
             if filename is None:
                 self._send(404, "Not found", "text/plain; charset=utf-8")
@@ -69,10 +82,19 @@ def run_web_server():
                 if not isinstance(message, str) or not message.strip():
                     raise ValueError("A non-empty message is required")
                 chatbot = get_bot()
+                before_qr_files = set(GENERATED_DIR.glob("qr_*.png"))
                 chatbot.logger.log("user", message.strip())
                 reply = chatbot.respond(message.strip())
                 chatbot.logger.log("bot", reply)
-                self._send(200, json.dumps({"reply": reply, "bot_name": chatbot.bot_name()}), "application/json; charset=utf-8")
+                after_qr_files = set(GENERATED_DIR.glob("qr_*.png"))
+                new_qr_files = after_qr_files - before_qr_files
+                image_url = None
+                if new_qr_files:
+                    image_url = "/generated_images/" + max(new_qr_files, key=lambda path: path.stat().st_mtime_ns).name
+                response = {"reply": reply, "bot_name": chatbot.bot_name()}
+                if image_url:
+                    response["image_url"] = image_url
+                self._send(200, json.dumps(response), "application/json; charset=utf-8")
             except (ValueError, TypeError, json.JSONDecodeError) as error:
                 self._send(400, json.dumps({"error": str(error)}), "application/json; charset=utf-8")
             except Exception:
