@@ -16,8 +16,8 @@ class OfflineSceneGenerator:
         "sunset", "sunrise", "ocean", "forest", "space", "city", "mountain",
         "desert", "aurora", "rainy", "garden", "winter",
     )
-    SIZE = (1536, 1024)  # 2x resolution
-    SUPER_SAMPLE = 2  # render at 2x then downsample for anti-aliasing
+    SIZE = (1024, 768)  # 4:3 ratio, reasonable for free tier
+    SUPER_SAMPLE = 1  # no super-sampling for speed on free tier
 
     TRAINING_EXAMPLES = {
         "sunset": ("golden hour", "warm evening sky", "orange sun over hills", "pink dusk", "twilight landscape"),
@@ -131,8 +131,11 @@ class OfflineSceneGenerator:
         theme = self.classify_prompt(prompt)
         rng = random.Random(seed if seed is not None else prompt)
 
-        # Render at super-sampled resolution for quality
-        sw, sh = self.SIZE[0] * self.SUPER_SAMPLE, self.SIZE[1] * self.SUPER_SAMPLE
+        w, h = self.SIZE
+        if self.SUPER_SAMPLE > 1:
+            sw, sh = w * self.SUPER_SAMPLE, h * self.SUPER_SAMPLE
+        else:
+            sw, sh = w, h
         image = Image.new("RGBA", (sw, sh), (0, 0, 0, 255))
         draw = ImageDraw.Draw(image, "RGBA")
 
@@ -154,8 +157,11 @@ class OfflineSceneGenerator:
         # Layer 5: Celestial bodies (sun, moon, planets)
         self._paint_celestial(draw, theme, sw, sh, rng)
 
-        # Downsample with high-quality filter
-        image = image.resize(self.SIZE, Image.Resampling.LANCZOS)
+        # Downsample if super-sampling was used
+        if self.SUPER_SAMPLE > 1:
+            image = image.resize(self.SIZE, Image.Resampling.LANCZOS)
+        else:
+            image = image.resize(self.SIZE, Image.Resampling.BILINEAR)
 
         # Color grading / tone mapping
         image = self._color_grade(image, theme)
@@ -169,7 +175,7 @@ class OfflineSceneGenerator:
             image = image.convert('RGB')
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        image.save(output_path, quality=95)
+        image.save(output_path, quality=90)
         return f"Generated an offline {theme} background with Pillow procedural rendering and saved it to {output_path}."
 
     def _paint_sky(self, draw, theme, w, h, rng):
@@ -218,8 +224,8 @@ class OfflineSceneGenerator:
     def _paint_far_background(self, draw, theme, w, h, rng):
         """Stars, distant mountains, far hills."""
         if theme == "space":
-            # Star field with varying magnitudes
-            for _ in range(800):
+            # Star field with varying magnitudes (reduced count)
+            for _ in range(300):  # reduced from 800
                 x = rng.randrange(w)
                 y = rng.randrange(h // 2)
                 mag = rng.random()
@@ -235,14 +241,14 @@ class OfflineSceneGenerator:
                 color = (brightness, brightness, brightness, brightness)
                 draw.ellipse((x - r, y - r, x + r, y + r), fill=color)
 
-            # Nebulae
-            for _ in range(6):
+            # Nebulae (reduced)
+            for _ in range(3):  # reduced from 6
                 cx = rng.randint(w // 4, 3 * w // 4)
                 cy = rng.randint(h // 6, h // 3)
                 rx = rng.randint(w // 6, w // 3)
                 ry = rng.randint(h // 8, h // 4)
                 hue = rng.random()
-                for _ in range(1000):
+                for _ in range(300):  # reduced from 1000
                     angle = rng.random() * 2 * math.pi
                     radius = rng.random() ** 0.5
                     px = int(cx + math.cos(angle) * rx * radius)
@@ -279,9 +285,9 @@ class OfflineSceneGenerator:
     def _paint_midground(self, draw, theme, w, h, rng):
         """Hills, treelines, city silhouettes."""
         if theme in ("forest", "garden", "mountain", "sunset", "sunrise"):
-            # Layered hills with trees
-            for layer in range(4):
-                base_y = h * (0.55 + layer * 0.1)
+            # Layered hills with trees (reduced layers)
+            for layer in range(3):  # reduced from 4
+                base_y = h * (0.55 + layer * 0.12)
                 color_dark = {
                     "forest": (15, 45, 25),
                     "garden": (25, 60, 30),
@@ -299,8 +305,8 @@ class OfflineSceneGenerator:
                 points.append((w, h))
                 draw.polygon(points, fill=color)
 
-                # Tree silhouettes on hill
-                for _ in range(15 + layer * 5):
+                # Tree silhouettes on hill (reduced)
+                for _ in range(10 + layer * 3):  # reduced
                     tx = rng.randint(0, w)
                     ty = int(base_y - rng.randint(10, 50))
                     tw = rng.randint(20, 50)
@@ -308,7 +314,7 @@ class OfflineSceneGenerator:
                     # Simple pine tree
                     trunk_color = (*color_dark[:3], alpha)
                     draw.rectangle((tx + tw//2 - 3, ty, tx + tw//2 + 3, ty + th//3), fill=trunk_color)
-                    for i in range(4):
+                    for i in range(3):  # reduced from 4
                         layer_y = ty - i * (th * 2 // 5)
                         layer_w = tw + i * 10
                         draw.polygon([
@@ -330,9 +336,9 @@ class OfflineSceneGenerator:
                     (40, 48, 65, 210),
                 ])
                 draw.rectangle((x, top, x + width, h), fill=color)
-                # Windows
-                for wx in range(x + 15, x + width - 10, 24):
-                    for wy in range(top + 20, h - 20, 30):
+                # Windows (reduced density)
+                for wx in range(x + 15, x + width - 10, 30):  # step 30 instead of 24
+                    for wy in range(top + 20, h - 20, 40):  # step 40 instead of 30
                         if rng.random() > 0.4:
                             win_color = (255, 220, 120, 200)
                             draw.rectangle((wx, wy, wx + 8, wy + 14), fill=win_color)
@@ -341,38 +347,38 @@ class OfflineSceneGenerator:
     def _paint_foreground(self, draw, theme, w, h, rng):
         """Detailed foreground elements."""
         if theme in ("forest", "garden"):
-            # Detailed trees with branches
-            for _ in range(8):
+            # Detailed trees with branches (reduced)
+            for _ in range(5):  # reduced from 8
                 tx = rng.randint(50, w - 50)
                 base_y = rng.randint(int(h * 0.7), h - 50)
                 self._draw_detailed_tree(draw, tx, base_y, rng, theme)
 
         elif theme == "ocean":
-            # Waves with foam
-            for layer in range(5):
+            # Waves with foam (reduced)
+            for layer in range(3):  # reduced from 5
                 y = h - 80 - layer * 25
                 alpha = 180 - layer * 30
-                for _ in range(20):
+                for _ in range(12):  # reduced from 20
                     x = rng.randint(-50, w + 50)
                     wx = rng.randint(60, 200)
                     draw.arc((x, y, x + wx, y + 40), 180, 360,
                              fill=(255, 255, 255, alpha), width=3)
 
-            # Shoreline foam
-            for _ in range(30):
+            # Shoreline foam (reduced)
+            for _ in range(15):  # reduced from 30
                 x = rng.randint(0, w)
                 y = h - rng.randint(60, 100)
                 draw.ellipse((x - 15, y - 8, x + 15, y + 8),
                              fill=(255, 255, 255, 180))
 
         elif theme == "desert":
-            # Sand dunes with shadows
-            for _ in range(5):
+            # Sand dunes with shadows (reduced)
+            for _ in range(3):  # reduced from 5
                 cx = rng.randint(100, w - 100)
                 cy = rng.randint(int(h * 0.65), h - 50)
                 rx = rng.randint(80, 200)
                 ry = rng.randint(30, 60)
-                for angle in range(0, 180, 5):
+                for angle in range(0, 180, 10):  # step 10 instead of 5
                     rad = math.radians(angle)
                     px = int(cx + math.cos(rad) * rx)
                     py = int(cy + math.sin(rad) * ry)
@@ -381,15 +387,15 @@ class OfflineSceneGenerator:
                         draw.ellipse((px - 20, py + 10, px + 20, py + 30), fill=shadow)
 
         elif theme == "winter":
-            # Snow-covered trees
-            for _ in range(6):
+            # Snow-covered trees (reduced)
+            for _ in range(4):  # reduced from 6
                 tx = rng.randint(50, w - 50)
                 base_y = rng.randint(int(h * 0.7), h - 50)
                 self._draw_snow_tree(draw, tx, base_y, rng)
 
         elif theme == "rainy":
-            # Puddles with reflections
-            for _ in range(12):
+            # Puddles with reflections (reduced)
+            for _ in range(8):  # reduced from 12
                 px = rng.randint(50, w - 50)
                 py = rng.randint(int(h * 0.75), h - 30)
                 rx = rng.randint(40, 120)
@@ -453,10 +459,10 @@ class OfflineSceneGenerator:
     def _paint_atmosphere(self, draw, theme, w, h, rng):
         """Fog, mist, rain, snow, aurora, god rays."""
         if theme in ("forest", "mountain", "winter"):
-            # Ground fog / mist layers
-            for layer in range(3):
+            # Ground fog / mist layers (reduced)
+            for layer in range(2):  # reduced from 3
                 y = h - 100 - layer * 60
-                for _ in range(200):
+                for _ in range(80):  # reduced from 200
                     fx = rng.randrange(w)
                     fy = y + rng.randint(-30, 30)
                     alpha = rng.randint(15, 40)
@@ -464,11 +470,11 @@ class OfflineSceneGenerator:
                                  fill=(255, 255, 255, alpha))
 
         if theme == "aurora":
-            # Aurora curtains
-            for _ in range(8):
+            # Aurora curtains (reduced)
+            for _ in range(5):  # reduced from 8
                 x = rng.randint(-100, w - 100)
                 points = []
-                for i in range(15):
+                for i in range(10):  # reduced from 15
                     px = x + i * (w // 15) + rng.randint(-30, 30)
                     py = rng.randint(50, 250)
                     points.append((px, py))
@@ -483,24 +489,24 @@ class OfflineSceneGenerator:
                         draw.line((points[i], points[i+1]), fill=color, width=rng.randint(8, 20), joint="curve")
 
         if theme == "rainy":
-            # Rain streaks
-            for _ in range(300):
+            # Rain streaks (reduced)
+            for _ in range(150):  # reduced from 300
                 x = rng.randrange(w)
                 y = rng.randrange(h - 100)
                 length = rng.randint(15, 35)
                 alpha = rng.randint(40, 100)
                 draw.line((x, y, x - 8, y + length), fill=(180, 200, 220, alpha), width=1)
 
-            # Ground splashes
-            for _ in range(40):
+            # Ground splashes (reduced)
+            for _ in range(20):  # reduced from 40
                 x = rng.randint(50, w - 50)
                 y = h - rng.randint(30, 80)
                 draw.ellipse((x - 3, y - 2, x + 3, y + 2),
                              fill=(200, 220, 240, 150))
 
         if theme == "winter":
-            # Falling snow
-            for _ in range(250):
+            # Falling snow (reduced)
+            for _ in range(120):  # reduced from 250
                 x = rng.randrange(w)
                 y = rng.randrange(h // 2)
                 size = rng.choice([1, 1, 2, 2, 3])
@@ -509,10 +515,10 @@ class OfflineSceneGenerator:
                              fill=(255, 255, 255, alpha))
 
         if theme in ("sunset", "sunrise"):
-            # God rays / crepuscular rays
+            # God rays / crepuscular rays (reduced)
             sun_x = w * (0.3 if theme == "sunrise" else 0.7)
             sun_y = h * 0.25
-            for _ in range(20):
+            for _ in range(12):  # reduced from 20
                 angle = rng.uniform(-0.8, 0.8)
                 length = h * 0.8
                 end_x = sun_x + math.cos(angle) * length
@@ -527,8 +533,8 @@ class OfflineSceneGenerator:
             # Sun with glow
             sun_x = w * (0.7 if theme == "sunset" else 0.3)
             sun_y = h * 0.22
-            for r in range(120, 0, -5):
-                alpha = max(5, int(80 * (r / 120)))
+            for r in range(80, 0, -8):  # reduced steps
+                alpha = max(5, int(80 * (r / 80)))
                 if theme == "sunset":
                     color = (255, 180, 60, alpha)
                 else:
@@ -542,12 +548,12 @@ class OfflineSceneGenerator:
             # Moon
             moon_x = w * (0.2 if theme == "aurora" else 0.8)
             moon_y = h * 0.15
-            for r in range(60, 0, -3):
-                alpha = max(20, int(100 * (r / 60)))
+            for r in range(50, 0, -5):  # reduced steps
+                alpha = max(20, int(100 * (r / 50)))
                 color = (220, 220, 235, alpha)
                 draw.ellipse((moon_x - r, moon_y - r, moon_x + r, moon_y + r), fill=color)
-            # Moon surface detail
-            for _ in range(15):
+            # Moon surface detail (reduced)
+            for _ in range(8):  # reduced from 15
                 mx = moon_x + rng.randint(-35, 35)
                 my = moon_y + rng.randint(-35, 35)
                 draw.ellipse((mx - 5, my - 5, mx + 5, my + 5),
