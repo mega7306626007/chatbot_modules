@@ -1,6 +1,5 @@
 """Offline procedural scene generator for richer image experiments."""
 
-import math
 import random
 from pathlib import Path
 
@@ -43,7 +42,32 @@ class OfflineSceneGenerator:
 
     def classify_prompt(self, prompt: str) -> str:
         """Classify varied natural-language scene requests locally."""
-        return str(self.classifier.predict(self.vectorizer.transform([prompt]))[0])
+        normalized = prompt.lower().replace("nighttime", "night").replace("snow-covered", "snow covered")
+        aliases = {
+            "dawn": "first light sunrise",
+            "morning": "early morning sunrise",
+            "icy": "winter frozen",
+            "snowy": "winter snow covered",
+            "woods": "forest woodland",
+            "skyline": "city urban skyline",
+            "coast": "ocean coastal water",
+            "beach": "ocean tropical beach",
+            "cyberpunk": "city neon metropolis",
+            "deserted": "desert arid",
+        }
+        for source, replacement in aliases.items():
+            normalized = normalized.replace(source, replacement)
+        high_signal_themes = (
+            ("aurora", ("aurora", "northern lights", "borealis")),
+            ("winter", ("winter", "snow", "snowy", "icy", "frozen")),
+            ("sunrise", ("sunrise", "dawn", "first light", "morning glow")),
+            ("rainy", ("rain", "rainy", "storm", "wet street", "umbrellas")),
+            ("desert", ("desert", "dunes", "cactus", "oasis")),
+        )
+        for theme, cues in high_signal_themes:
+            if any(cue in normalized for cue in cues):
+                return theme
+        return str(self.classifier.predict(self.vectorizer.transform([normalized]))[0])
 
     def generate(self, prompt: str, output_path: str, seed: int = None) -> str:
         theme = self.classify_prompt(prompt)

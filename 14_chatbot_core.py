@@ -3369,7 +3369,13 @@ class ChatBot:
         if not user_text:
             return "I didn't catch that - could you say something?"
 
-        if any(keyword in user_text.lower() for keyword in ("background", "landscape", "scenery", "complex image")):
+        scene_cues = (
+            "background", "landscape", "scenery", "complex image", "scene", "wallpaper",
+            "sunset", "sunrise", "dawn", "morning", "winter", "snow", "ice", "aurora",
+            "ocean", "beach", "forest", "woods", "mountain", "desert", "rainy", "garden",
+            "cityscape", "skyline", "galaxy", "space", "neon",
+        )
+        if any(keyword in user_text.lower() for keyword in scene_cues):
             return self._handle_generate_scene(user_text)
 
         # If there's an active hangman game, treat bare single letters as
