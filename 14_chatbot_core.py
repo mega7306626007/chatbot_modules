@@ -3653,7 +3653,8 @@ class ChatBot:
             "ocean", "beach", "forest", "woods", "mountain", "desert", "rainy", "garden",
             "cityscape", "skyline", "galaxy", "space", "neon",
         )
-        if any(keyword in user_text.lower() for keyword in scene_cues):
+        # Use word-boundary matching to avoid false positives like "advice" -> "ice"
+        if any(re.search(r"\b" + re.escape(kw) + r"\b", user_text.lower()) for kw in scene_cues):
             return self._handle_generate_scene(user_text)
 
         # If there's an active hangman game, treat bare single letters as
