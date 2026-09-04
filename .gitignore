@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+venv/
+
+# Runtime artifacts / local state (never commit)
+chatbot.db*
+generated_images/
+model_cache/
+
+# Local config - may contain keys; Render gets fresh copies or runs without them
+chatbot_llm_config.json
+chatbot_translation_config.json
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db

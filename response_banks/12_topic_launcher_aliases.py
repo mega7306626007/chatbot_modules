@@ -64,7 +64,22 @@ TOPIC_LAUNCHER_ALIASES = {
     "learning": "learning_topic", "goals": "motivation_goals_topic",
     "motivation": "motivation_goals_topic", "nostalgia": "nostalgia_topic",
     "future plans": "future_plans_topic", "gaming": "gaming_topic", "games": "gaming_topic",
-    "cooking": "cooking_topic", "food prep": "cooking_topic", "nature": "nature_outdoors_topic",
+    "cooking": "cooking_topic", "food prep": "cooking_topic", "recipes": "cooking_topic",
+    # sports aliases - "football" vs "soccer" vary by region, and only
+    # "sports" used to resolve here, so "let's talk about football"
+    # bounced with "I don't have a topic for that yet".
+    "football": "sports_topic", "footie": "sports_topic", "soccer": "sports_topic",
+    "basketball": "sports_topic", "ball": "sports_topic", "rugby": "sports_topic",
+    "cricket": "sports_topic", "tennis": "sports_topic", "volleyball": "sports_topic",
+    # photography / arts - previously unlaunchable by name.
+    "photography": "photography_art_topic", "photograph": "photography_art_topic",
+    "photos": "photography_art_topic", "photographs": "photography_art_topic",
+    "camera": "photography_art_topic", "photography art": "photography_art_topic",
+    # music instrument/genre names - "let's talk about jazz" should land
+    # on the music topic rather than the "no topic" reply.
+    "jazz": "music_topic", "guitar": "music_topic", "piano": "music_topic",
+    "concerts": "music_topic", "albums": "music_topic",
+    "nature": "nature_outdoors_topic",
     "outdoors": "nature_outdoors_topic", "sleep": "sleep_dreams_topic",
     "dreams": "sleep_dreams_topic", "humor": "humor_appreciation_topic",
     "comedy": "humor_appreciation_topic", "movies": "movies_tv_topic", "tv": "movies_tv_topic",
