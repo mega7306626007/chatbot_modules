@@ -298,6 +298,13 @@ import urllib.parse
 import sqlite3
 import contextlib
 
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+    PSYCOPG_AVAILABLE = True
+except ImportError:
+    PSYCOPG_AVAILABLE = False
+
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -380,6 +387,7 @@ APP_VERSION = "1.0.0"
 # class) - facts, todos, conversation log, both classifiers'
 # corrections, training history, and LLM config all live here now.
 DATABASE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chatbot.db")
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
 # The paths below are KEPT only so a one-time migration can import data
 # from anyone upgrading from a pre-database version of this file. Once
@@ -487,6 +495,54 @@ CREATE INDEX IF NOT EXISTS idx_history_classifier ON training_history(classifier
 """
 
 
+class _PostgresCursor:
+    """Small compatibility wrapper for the existing SQLite-style queries."""
+
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, sql, params=()):
+        return self._cursor.execute(sql.replace("?", "%s"), params)
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+
+class _PostgresConnection:
+    """Expose the subset of sqlite3.Connection used by Database."""
+
+    def __init__(self, url):
+        self._conn = psycopg.connect(url, row_factory=dict_row)
+
+    def execute(self, sql, params=()):
+        cursor = _PostgresCursor(self._conn.cursor())
+        return cursor.execute(sql, params)
+
+    def cursor(self):
+        return _PostgresCursor(self._conn.cursor())
+
+    def executescript(self, schema):
+        for statement in schema.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY").split(";"):
+            if statement.strip():
+                self.execute(statement)
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+
 class Database:
     """
     Single SQLite-backed store for everything the chatbot persists
@@ -500,15 +556,25 @@ class Database:
     """
 
     def __init__(self, db_path: str):
-        self.db_path = db_path
-        self._conn = sqlite3.connect(self.db_path)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA foreign_keys = ON")
+        self.db_path = DATABASE_URL or db_path
+        self.backend = "postgres" if DATABASE_URL else "sqlite"
+        if self.backend == "postgres":
+            if not PSYCOPG_AVAILABLE:
+                raise RuntimeError("DATABASE_URL is set, but psycopg is not installed.")
+            self._conn = _PostgresConnection(DATABASE_URL)
+        else:
+            self._conn = sqlite3.connect(self.db_path)
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA foreign_keys = ON")
         self._init_schema()
 
     def _init_schema(self):
-        with self._conn:
+        if self.backend == "postgres":
             self._conn.executescript(DATABASE_SCHEMA)
+            self._conn.commit()
+        else:
+            with self._conn:
+                self._conn.executescript(DATABASE_SCHEMA)
 
     def close(self):
         self._conn.close()
@@ -579,9 +645,13 @@ class Database:
     def add_todo_row(self, text: str) -> int:
         now = dt.datetime.now().isoformat(timespec="seconds")
         with self._cursor() as cur:
-            cur.execute(
-                "INSERT INTO todos (text, done, created_at) VALUES (?, 0, ?)", (text, now)
-            )
+            if self.backend == "postgres":
+                cur.execute(
+                    "INSERT INTO todos (text, done, created_at) VALUES (?, 0, ?) RETURNING id",
+                    (text, now),
+                )
+                return cur.fetchone()["id"]
+            cur.execute("INSERT INTO todos (text, done, created_at) VALUES (?, 0, ?)", (text, now))
             return cur.lastrowid
 
     def list_todo_rows(self):
@@ -852,6 +922,8 @@ class Database:
         return counts
 
     def file_size_bytes(self) -> int:
+        if self.backend == "postgres":
+            return 0
         try:
             return os.path.getsize(self.db_path)
         except OSError:
