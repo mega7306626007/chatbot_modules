@@ -78,3 +78,9 @@ document.querySelectorAll('.nav-section-header').forEach((header) => {
     header.parentElement.classList.toggle('open');
   });
 });
+
+document.querySelector('#qr-generator-btn').addEventListener('click', () => {
+  input.value = 'make qr code: ';
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+});

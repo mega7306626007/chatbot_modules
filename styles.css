@@ -43,6 +43,10 @@ button { cursor: pointer; }
 .nav-subitem { display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 28px; border: 0; border-radius: 0; color: #bdcbc4; background: transparent; text-align: left; font-size: 12px; }
 .nav-subitem:hover { color: white; background: rgba(255,255,255,.08); }
 
+.qr-button { background: rgba(255,255,255,.08); color: #e88468; font-weight: 600; }
+.qr-button:hover { background: rgba(232,132,104,.2); color: #e88468; }
+.qr-button .nav-icon { color: #e88468; }
+
 .sidebar-bottom { margin-top: auto; }
 .system-card { margin: 18px 5px 22px; padding: 15px; border: 1px solid rgba(147,190,168,.2); border-radius: 8px; background: rgba(143, 190, 168, .09); }
 .status-line { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; }
