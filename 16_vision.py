@@ -2,7 +2,6 @@
 Auto-split from the original single-file chatbot.py - see main.py for load order.
 """
 
-import math
 import random
 
 # SECTION 12: SYSTEM STATUS + IMAGE ANALYSIS (psutil, Pillow, OpenCV, Keras)
@@ -767,7 +766,7 @@ class ImageAnalyzer:
 
 # ---- Keras shape classifier: synthetic training data --------------------
 
-SHAPE_CLASSES = ["circle", "square", "triangle", "star", "heart", "diamond", "pentagon", "hexagon", "oval", "cross"]
+SHAPE_CLASSES = ["circle", "square", "triangle"]
 SHAPE_IMAGE_SIZE = 32
 
 
@@ -782,45 +781,13 @@ def _generate_shape_image(shape: str, size: int = SHAPE_IMAGE_SIZE, rng: random.
     margin = rng.randint(2, 6)
     jitter = rng.randint(-2, 2)
     box = [margin + jitter, margin - jitter, size - margin + jitter, size - margin - jitter]
-    cx, cy = size // 2, size // 2
-    r = min(box[2] - box[0], box[3] - box[1]) // 2
 
     if shape == "circle":
         draw.ellipse(box, fill=255)
     elif shape == "square":
         draw.rectangle(box, fill=255)
     elif shape == "triangle":
-        draw.polygon([(cx + jitter, box[1]), (box[0], box[3]), (box[2], box[3])], fill=255)
-    elif shape == "star":
-        points = []
-        for i in range(5):
-            angle = math.pi * 2 * i / 5 - math.pi / 2
-            points.append((cx + int(r * math.cos(angle)), cy + int(r * math.sin(angle))))
-            angle_inner = math.pi * 2 * (i + 0.5) / 5 - math.pi / 2
-            points.append((cx + int(r * 0.4 * math.cos(angle_inner)), cy + int(r * 0.4 * math.sin(angle_inner))))
-        draw.polygon(points, fill=255)
-    elif shape == "heart":
-        points = []
-        for t in range(0, 360, 5):
-            angle = math.radians(t)
-            x = 16 * math.sin(angle) ** 3
-            y = -(13 * math.cos(angle) - 5 * math.cos(2 * angle) - 2 * math.cos(3 * angle) - math.cos(4 * angle))
-            points.append((cx + int(x * r / 16), cy + int(y * r / 16)))
-        draw.polygon(points, fill=255)
-    elif shape == "diamond":
-        draw.polygon([(cx, box[1]), (box[2], cy), (cx, box[3]), (box[0], cy)], fill=255)
-    elif shape == "pentagon":
-        points = [(cx + int(r * math.cos(math.pi * 2 * i / 5 - math.pi / 2)), cy + int(r * math.sin(math.pi * 2 * i / 5 - math.pi / 2))) for i in range(5)]
-        draw.polygon(points, fill=255)
-    elif shape == "hexagon":
-        points = [(cx + int(r * math.cos(math.pi * 2 * i / 6 - math.pi / 2)), cy + int(r * math.sin(math.pi * 2 * i / 6 - math.pi / 2))) for i in range(6)]
-        draw.polygon(points, fill=255)
-    elif shape == "oval":
-        draw.ellipse([box[0], box[1] + r//3, box[2], box[3] - r//3], fill=255)
-    elif shape == "cross":
-        bar_w = r // 2
-        draw.rectangle([cx - bar_w, box[1], cx + bar_w, box[3]], fill=255)
-        draw.rectangle([box[0], cy - bar_w, box[2], cy + bar_w], fill=255)
+        draw.polygon([(size // 2 + jitter, box[1]), (box[0], box[3]), (box[2], box[3])], fill=255)
 
     return np.array(img, dtype=np.float32) / 255.0
 

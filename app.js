@@ -72,15 +72,3 @@ document.querySelector('#new-chat').addEventListener('click', () => window.locat
 document.querySelector('#clear-chat').addEventListener('click', () => window.location.reload());
 document.querySelector('.menu-toggle').addEventListener('click', () => document.querySelector('.sidebar').classList.add('open'));
 document.querySelector('.mobile-close').addEventListener('click', () => document.querySelector('.sidebar').classList.remove('open'));
-
-document.querySelectorAll('.nav-section-header').forEach((header) => {
-  header.addEventListener('click', () => {
-    header.parentElement.classList.toggle('open');
-  });
-});
-
-document.querySelector('#qr-generator-btn').addEventListener('click', () => {
-  input.value = 'make qr code: ';
-  input.focus();
-  input.setSelectionRange(input.value.length, input.value.length);
-});

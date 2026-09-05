@@ -15,9 +15,6 @@ class OfflineSceneGenerator:
     THEMES = (
         "sunset", "sunrise", "ocean", "forest", "space", "city", "mountain",
         "desert", "aurora", "rainy", "garden", "winter",
-        "beach", "nebula", "castle", "zen garden", "steampunk", "robot",
-        "mystical forest", "coral reef", "dawn", "cyberpunk", "cabin",
-        "vintage car", "airship", "underwater", "ruins", "meadow", "volcano",
     )
     SIZE = (1024, 768)  # 4:3 ratio, reasonable for free tier
     SUPER_SAMPLE = 1  # no super-sampling for speed on free tier
@@ -35,23 +32,6 @@ class OfflineSceneGenerator:
         "rainy": ("rain on glass", "stormy afternoon", "wet street reflections", "cloudy rain", "umbrellas in the rain"),
         "garden": ("spring garden", "flowers and butterflies", "botanical garden", "greenhouse plants", "cottage garden"),
         "winter": ("snowy cabin", "icy mountain morning", "frozen lake", "winter forest", "snow covered village"),
-        "beach": ("sandy beach", "palm trees ocean", "tropical shore", "coastal waves", "beach sunset"),
-        "nebula": ("colorful nebula", "cosmic gas cloud", "deep space nebula", "interstellar cloud", "emission nebula"),
-        "castle": ("medieval castle", "fantasy fortress", "stone keep", "castle on hill", "magical kingdom"),
-        "zen garden": ("japanese garden", "raked sand", "peaceful garden", "zen stones", "meditation garden"),
-        "steampunk": ("steampunk city", "gear machinery", "victorian sci-fi", "clockwork mechanism", "brass gears"),
-        "robot": ("cute robot", "friendly android", "robot character", "mechanical companion", "sci-fi robot"),
-        "mystical forest": ("glowing mushrooms", "enchanted woods", "magical forest", "fairy lights forest", "bioluminescent forest"),
-        "coral reef": ("underwater coral", "colorful reef", "tropical fish coral", "marine life", "ocean reef"),
-        "dawn": ("early morning light", "misty dawn", "first light landscape", "morning mist", "daybreak"),
-        "cyberpunk": ("neon city", "futuristic metropolis", "cyberpunk street", "holographic ads", "dystopian city"),
-        "cabin": ("cozy cabin", "wooden cabin woods", "rustic cabin", "cabin in snow", "forest cabin"),
-        "vintage car": ("classic car", "retro automobile", "1960s car", "old timer", "vintage vehicle"),
-        "airship": ("steampunk airship", "zeppelin", "flying ship", "dirigible", "airship sky"),
-        "underwater": ("deep ocean", "underwater scene", "marine life", "ocean depths", "submerged world"),
-        "ruins": ("ancient ruins", "lost city", "crumbling temple", "archaeological site", "abandoned ruins"),
-        "meadow": ("flower meadow", "wildflower field", "grassy plains", "sunny meadow", "spring flowers"),
-        "volcano": ("erupting volcano", "lava flow", "volcanic mountain", "magma", "fire mountain"),
     }
 
     def __init__(self):
