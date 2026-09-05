@@ -2,10 +2,12 @@
 Auto-split from the original single-file chatbot.py - see main.py for load order.
 """
 
-# SECTION 4: DATE & TIME ENGINE
-# ==============================================================================
+import datetime as dt
+from datetime import timezone, timedelta
 
-class DateTimeEngine:
+# Default timezone offset (e.g., -3 for UTC-3)
+DEFAULT_TZ_OFFSET = -3
+DEFAULT_TZ = timezone(timedelta(hours=DEFAULT_TZ_OFFSET))
     """
     Handles every date/time related question the bot can answer:
     current time, current date, day of week, days until a holiday,
@@ -46,7 +48,7 @@ class DateTimeEngine:
 
     @staticmethod
     def now() -> dt.datetime:
-        return dt.datetime.now()
+        return dt.datetime.now(DEFAULT_TZ)
 
     def current_time_str(self) -> str:
         now = self.now()
