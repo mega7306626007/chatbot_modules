@@ -33,13 +33,20 @@
         <p class="nav-label">Workspace</p>
         <button class="nav-item active" type="button"><span class="nav-icon" aria-hidden="true">&#9673;</span> Chat <span class="nav-count">1</span></button>
         <button class="nav-item" type="button" data-command="show stats"><span class="nav-icon" aria-hidden="true">&#9636;</span> Memory</button>
-        <p class="nav-label" style="margin-top:14px">Landscapes</p>
-        <button class="nav-subitem-ls" type="button" data-command="generate image: a peaceful forest">&#127963; Forest</button>
-        <button class="nav-subitem-ls" type="button" data-command="generate image: a serene beach at sunset">&#127965; Beach Sunset</button>
-        <button class="nav-subitem-ls" type="button" data-command="generate image: a mountain landscape at dawn">&#127968; Mountain Dawn</button>
-        <button class="nav-subitem-ls" type="button" data-command="generate image: a space nebula galaxy">&#128640; Space</button>
-        <button class="nav-subitem-ls" type="button" data-command="generate image: an ocean sunset">&#127754; Ocean</button>
-        <button class="nav-subitem-ls" type="button" data-command="generate image: a snowy winter forest">&#127784; Winter</button>
+        <div class="nav-section" id="landscape-tools">
+          <div class="nav-section-header">
+            <span class="nav-section-title">Landscapes</span>
+            <span class="nav-section-toggle" aria-hidden="true">&#9654;</span>
+          </div>
+          <div class="nav-section-content">
+            <button class="nav-subitem" type="button" data-fill="generate image: a peaceful forest">&#127963; Forest</button>
+            <button class="nav-subitem" type="button" data-fill="generate image: a serene beach at sunset">&#127965; Beach Sunset</button>
+            <button class="nav-subitem" type="button" data-fill="generate image: a mountain landscape at dawn">&#127968; Mountain Dawn</button>
+            <button class="nav-subitem" type="button" data-fill="generate image: a space nebula galaxy">&#128640; Space</button>
+            <button class="nav-subitem" type="button" data-fill="generate image: an ocean sunset">&#127754; Ocean</button>
+            <button class="nav-subitem" type="button" data-fill="generate image: a snowy winter forest">&#127784; Winter</button>
+          </div>
+        </div>
         <button class="nav-item" type="button" data-command="help"><span class="nav-icon" aria-hidden="true">?</span> Capabilities</button>
       </nav>
 

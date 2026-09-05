@@ -72,3 +72,17 @@ document.querySelector('#new-chat').addEventListener('click', () => window.locat
 document.querySelector('#clear-chat').addEventListener('click', () => window.location.reload());
 document.querySelector('.menu-toggle').addEventListener('click', () => document.querySelector('.sidebar').classList.add('open'));
 document.querySelector('.mobile-close').addEventListener('click', () => document.querySelector('.sidebar').classList.remove('open'));
+
+document.querySelectorAll('.nav-section-header').forEach((header) => {
+  header.addEventListener('click', () => {
+    header.parentElement.classList.toggle('open');
+  });
+});
+
+document.querySelectorAll('[data-fill]').forEach((button) => {
+  button.addEventListener('click', () => {
+    input.value = button.dataset.fill;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  });
+});
