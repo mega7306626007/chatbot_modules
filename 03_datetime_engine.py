@@ -8,6 +8,8 @@ from datetime import timezone, timedelta
 # Default timezone offset (e.g., -3 for UTC-3)
 DEFAULT_TZ_OFFSET = -3
 DEFAULT_TZ = timezone(timedelta(hours=DEFAULT_TZ_OFFSET))
+
+class DateTimeEngine:
     """
     Handles every date/time related question the bot can answer:
     current time, current date, day of week, days until a holiday,
