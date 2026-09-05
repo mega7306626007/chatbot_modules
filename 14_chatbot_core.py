@@ -574,7 +574,7 @@ class ChatBot:
         e.register(
             "generate_qr_code",
             [r"\b(?:generate|make|create) (?:a |me a )?qr code (?:for|of|with)?[:\s]+(.+)",
-             r"\bqr code (?:for|of)?[:\s]+(.+)"],
+             r"\bqr code (?:for|of)[:\s]+(.+)"],
             self._handle_generate_qr_code,
         )
         e.register(
