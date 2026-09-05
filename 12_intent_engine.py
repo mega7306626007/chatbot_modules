@@ -374,7 +374,7 @@ class TypoCorrector:
         "back", "front", "side", "topic", "topics", "flashcard", "flashcards",
         "test", "tests", "testing", "tested",
         "base", "base64", "hash", "json", "csv", "entities", "entity",
-        "extract", "validate", "decode", "encode",
+        "extract", "validate", "decode", "encode", "code", "qr",
         # Everyday conversational vocabulary that was absent here, each
         # sitting at edit-distance 1 from an unrelated COMMON_WORDS entry
         # and therefore getting silently rewritten on real messages
