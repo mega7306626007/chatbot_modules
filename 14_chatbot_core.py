@@ -1526,8 +1526,8 @@ class ChatBot:
         topic = m.group(4).strip().rstrip("?.! ") if m.group(4) else ""
         topic = topic or None
         poem = self.poet.haiku(topic, lang=lang)
-        label = f" about {topic}" if topic else ""
-        return f"Here's a haiku{label}:\n\n{poem}"
+        label = f" on {topic}" if topic else ""
+        return f"Here's a chain of haiku{label}:\n\n{poem}"
 
     def _handle_write_poem_general(self, text, m):
         lang = self.language_detector.detect(text)
@@ -1538,7 +1538,7 @@ class ChatBot:
         topic = topic or "general"
         theme_words = self.poet.THEME_WORDS.get(lang, self.poet.THEME_WORDS["en"])
         topic_key = topic.lower() if topic.lower() in theme_words else "general"
-        poem = self.poet.rhyming_couplets(theme=topic_key, num_couplets=2, lang=lang)
+        poem = self.poet.rhyming_couplets(theme=topic_key, lang=lang)
         label = f" about {topic}" if topic and topic_key != "general" else ""
         return f"Here's a poem{label}:\n\n{poem}"
 
@@ -4177,7 +4177,7 @@ class ChatBot:
             return f"📖 {title}\n\n{body}"
         if topic == "poem":
             self._mark_topic_resolved(topic)
-            poem = self.poet.rhyming_couplets(theme="general", num_couplets=2, lang=lang)
+            poem = self.poet.rhyming_couplets(theme="general", lang=lang)
             return f"Here's a poem:\n\n{poem}"
         if topic == "hangman_topic":
             self._mark_topic_resolved(topic)

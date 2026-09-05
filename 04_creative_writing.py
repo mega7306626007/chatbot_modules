@@ -14,7 +14,12 @@ class StoryTeller:
     This is plain string templating - no generative model involved.
     """
 
-    def __init__(self):
+    def __init__(self, temperature: float = 1.8):
+        # Sampling heat for rich tellings. Higher temperature layers in
+        # MORE continuation material (epilogue, denouement, plus a final
+        # echo and a wild twist at the top end) so generation runs hotter,
+        # longer, loopier and rarely gives the same shape twice.
+        self.temperature = temperature
         self.stories = {
             "en": {
                 "adventure": [
@@ -842,6 +847,26 @@ _RHYME_BANK_SW = {
                 "ombo",
                 "sambo",
                 "kombo"
+            ],
+            "bahari": [
+                "tari",
+                "kari",
+                "mari"
+            ],
+            "nyota": [
+                "pota",
+                "lota",
+                "njia ya kiota"
+            ],
+            "tamaa": [
+                "kaa",
+                "zaa",
+                "bakaa"
+            ],
+            "rafiki": [
+                "fikiri",
+                "samahani moyoni",
+                "kweli njiani"
             ]
         }
 
@@ -895,6 +920,25 @@ _RHYME_BANK_FR = {
                 "flamme",
                 "femme",
                 "trame"
+            ],
+            "rivage": [
+                "courage",
+                "voyage",
+                "visage"
+            ],
+            "étoile": [
+                "voile",
+                "toile"
+            ],
+            "esprit": [
+                "petit",
+                "détruit",
+                "minuit"
+            ],
+            "flamme": [
+                "trame",
+                "gamme",
+                "belle infâme"
             ]
         }
 
@@ -1205,6 +1249,86 @@ class PoemWriter:
 
     RHYME_BANK = {"en": _RHYME_BANK_EN, "sw": _RHYME_BANK_SW, "fr": _RHYME_BANK_FR}
 
+    # ---- longer-poem continuation banks ----------------------------------
+    # Minimum line count for any generated poem (haiku is generated as a
+    # chain of enough 3-line stanzas to clear this). Acrostics open each
+    # letter with a stanza, so they need theme-neutral echo lines to pad
+    # letters up to triple lines.
+    POEM_MIN_LINES = 25
+
+    POEM_ECHOES = {
+        "en": [
+            "and the morning held its breath a moment longer",
+            "while somewhere far off, the hills began to shine",
+            "the way all tender things do when they forget to be afraid",
+            "and time, that old forgiver, looked the other way",
+            "as if the world, for once, had nothing better to do",
+            "and every road the heart takes leads it home again",
+            "until the smallest sound could carry the whole sky",
+            "and the days, which were heavy, grew suddenly light",
+            "the way a held hand counsels more than any promise can",
+            "and all the quiet hours came crowding in to listen",
+            "because even the sun leans close to see a thing this true",
+            "and nothing that was lost stayed lost for very long",
+            "so gently that the stars agreed to stay an extra hour",
+            "and what had been a whisper settled into song",
+        ],
+        "sw": [
+            "na asubuhi ikashika pumzi muda mrefu kidogo",
+            "wakati mbali, milima ilianza kung'aa",
+            "kama vile mambo laini yanavyofanya yakisahau kuogopa",
+            "na wakati, msamzaji mkongwe, akageuka upande mwingine",
+            "kana kwamba dunia, kwa mara moja, haikuwa na la kufanya",
+            "na kila barabara moyo inayoichukua inamrudisha nyumbani",
+            "mpaka sauti ndogo kabisa ikaweza kubeba anga zima",
+            "na siku, zilizokuwa nzito, zikageuka mwanga",
+            "kama mkono ulioshikiliwa unavyoshauri zaidi kuliko ahadi yoyote",
+            "na saa za kimya zikakusanyika kusikiliza",
+        ],
+        "fr": [
+            "et le matin retint son souffle un moment de plus",
+            "pendant qu'au loin, les collines se mettaient à briller",
+            "comme font toutes les choses tendres quand elles oublient d'avoir peur",
+            "et le temps, ce vieux pardonneur, regarda ailleurs",
+            "comme si le monde, pour une fois, n'avait rien de mieux à faire",
+            "et chaque chemin que le cœur prend le ramène à la maison",
+            "jusqu'à ce que le plus petit son puisse porter tout le ciel",
+            "et les jours, qui pesaient lourd, devinrent soudain légers",
+            "comme une main tenue conseille plus qu'aucune promesse",
+            "et toutes les heures silencieuses se pressèrent pour écouter",
+        ],
+    }
+
+    ACROSTIC_INTRO = {
+        "en": [
+            "I traced your word across the page until it learned to walk,",
+            "every letter leaning close, waiting for its turn to talk,",
+        ],
+        "sw": [
+            "Niliandika neno lako ukurasani mpaka likajifunza kutembea,",
+            "kila herufi ikiegemea karibu, ikingoja zamu yake ya kusema,",
+        ],
+        "fr": [
+            "J'ai tracé ton mot sur la page jusqu'à ce qu'il apprenne à marcher,",
+            "chaque lettre se penchant, attendant son tour de parler,",
+        ],
+    }
+
+    ACROSTIC_CLOSING = {
+        "en": [
+            "So here it stands, the word you gave, now tall enough to see,",
+            "twenty-five lines, and still the same bright ending: you, and me.",
+        ],
+        "sw": [
+            "Kwa hiyo husimama, neno ulilolitoa, sasa kirefu cha kutosha kuonekana,",
+            "mistari ishirini na mitano, na mwisho ule ule mkali: wewe, na mimi.",
+        ],
+        "fr": [
+            "Voici donc le mot que tu as donné, assez haut désormais pour se faire voir,",
+            "vingt-cinq lignes, et toujours la même fin lumineuse : toi, et moi.",
+        ],
+    }
+
     VOWELS = "aeiouy"
 
     # ---- syllable counting -------------------------------------------------
@@ -1242,12 +1366,21 @@ class PoemWriter:
     # ---- acrostic -----------------------------------------------------------
 
     def acrostic(self, word: str, lang: str = "en") -> str:
-        """Build an acrostic poem where each line starts with successive
-        letters of `word`, using theme-relevant phrase fragments in
-        whichever of the three languages was requested."""
+        """Build an acrostic poem with at least POEM_MIN_LINES lines. Each
+        letter of `word` opens a three-line stanza (the letter line plus two
+        continuation echoes), prefixed by a two-line intro and capped by a
+        two-line closing. For short words the word is repeated across
+        rounds (a classic verse technique) so the length guarantee holds
+        for a name like SUN or a phrase like HELLO WORLD alike."""
         word = re.sub(r"[^a-zA-Z]", "", word).upper()
         if not word:
             word = "HELLO"
+
+        letters = list(word)
+        lines_needed = self.POEM_MIN_LINES - 4
+        slot_lines = len(letters) * 3
+        rounds = max(1, (lines_needed + slot_lines - 1) // slot_lines)
+        letters_all = letters * rounds
 
         fragments_by_letter = self._build_letter_fragments(lang)
         fallback = {
@@ -1255,14 +1388,28 @@ class PoemWriter:
             "sw": "ni ajabu ya kimya ya pekee yake",
             "fr": "est une merveille silencieuse à part entière",
         }.get(lang, "is a quiet wonder all its own")
-        lines = []
-        for letter in word:
+        echoes = self.POEM_ECHOES.get(lang, self.POEM_ECHOES["en"])
+        intro = self.ACROSTIC_INTRO.get(lang, self.ACROSTIC_INTRO["en"])
+        closing = self.ACROSTIC_CLOSING.get(lang, self.ACROSTIC_CLOSING["en"])
+        echo_lines = self._stanza_line_picks(echoes, len(letters_all) * 2)
+
+        lines = list(intro)
+        ei = 0
+        for letter in letters_all:
             options = fragments_by_letter.get(letter)
-            if options:
-                fragment = random.choice(options)
-            else:
-                fragment = fallback
+            fragment = random.choice(options) if options else fallback
             lines.append(f"{letter}{fragment}")
+            echo_a = echo_lines[ei]
+            ei += 1
+            echo_b = echo_lines[ei]
+            ei += 1
+            guard = 0
+            while echo_b == echo_a and guard < 5:
+                echo_b = random.choice(echoes)
+                guard += 1
+            lines.append(echo_a)
+            lines.append(echo_b)
+        lines.extend(closing)
         return "\n".join(lines)
 
     @staticmethod
@@ -1313,6 +1460,10 @@ class PoemWriter:
             "the old door creaks shut", "frost covers the field", "smoke curls from the fire",
             "the pond sits so still", "petals touch the ground", "the moon climbs the sky",
             "wind moves through the reeds", "the garden sleeps now", "waves reach for the shore",
+            "birds circle the roof", "dusk paints the barn red", "mist curls round the tree",
+            "crickets hum at night", "owls wake the dark wood", "sun sinks past the pines",
+            "birds call to the dawn", "the fog swallows hills", "rivers find the sea",
+            "a fox slips through frost", "hills lean on the light", "webs silver with dew",
         ],
         7: [
             "and quiet settles in close", "while the valley holds its breath",
@@ -1321,6 +1472,10 @@ class PoemWriter:
             "while shadows stretch down the lane", "a heron waits in the reeds",
             "and morning waits at the door", "the world exhales and grows still",
             "while distant thunder replies", "and the fields turn gold and gray",
+            "and the wind forgets its way", "perhaps the rain will listen",
+            "and every star stays awake", "the lantern keeps one small flame",
+            "and dawn unlatches the hills", "and clouds return to the field",
+            "the first moth seeks the bright lamp",
         ],
     }
 
@@ -1330,30 +1485,61 @@ class PoemWriter:
     HAIKU_LINE_BANK_SW = _HAIKU_SW
     HAIKU_LINE_BANK_FR = _HAIKU_FR
 
-    def haiku(self, topic: str = None, lang: str = "en") -> str:
+    @staticmethod
+    def _stanza_line_picks(pool, count):
+        """Pick `count` lines from a pool, shuffling to spread variety and
+        recycling only if the pool is smaller than the request."""
+        shuffled = list(pool)
+        random.shuffle(shuffled)
+        return [shuffled[i % len(shuffled)] for i in range(count)]
+
+    def haiku(self, topic: str = None, lang: str = "en", stanzas: int = 9) -> str:
         """
-        Build a 3-line haiku-style poem. For English this follows the
-        classic 5-7-5 syllable rule, with lines assembled from a
-        hand-written bank and verified against the rule-based syllable
-        counter, plus an optional topic word woven into the first line
-        when it fits cleanly. For Swahili and French, syllable counting
-        with an English-tuned vowel heuristic isn't linguistically valid
-        (different vowel/liaison rules), so those two languages instead
-        draw from their own fixed, hand-checked 3-line pools - still
-        template filling, just without the syllable-count verification
-        step that only makes sense for English.
+        Build a chain of haiku stanzas (9 by default = 27 lines, which
+        clears POEM_MIN_LINES). Each stanza is a 3-line haiku-style poem.
+        For English this follows the classic 5-7-5 syllable rule, with
+        lines assembled from a hand-written bank and verified against the
+        rule-based syllable counter, plus an optional topic word woven into
+        the first line of the opening stanza when it fits cleanly. For
+        Swahili and French, syllable counting with an English-tuned vowel
+        heuristic isn't linguistically valid (different vowel/liaison
+        rules), so those two languages instead draw from their own fixed,
+        hand-checked 3-line pools - still template filling, just without
+        the syllable-count verification step that only makes sense for
+        English.
         """
+        stanzas = max(1, int(stanzas))
+        if stanzas * 3 < self.POEM_MIN_LINES:
+            stanzas = -(-self.POEM_MIN_LINES // 3)
+
         if lang == "sw":
             pool = self.HAIKU_LINE_BANK_SW
-            return f"{random.choice(pool['1'])}\n{random.choice(pool['2'])}\n{random.choice(pool['3'])}"
+            return "\n\n".join(
+                f"{a}\n{b}\n{c}"
+                for a, b, c in zip(
+                    self._stanza_line_picks(pool["1"], stanzas),
+                    self._stanza_line_picks(pool["2"], stanzas),
+                    self._stanza_line_picks(pool["3"], stanzas),
+                )
+            )
         if lang == "fr":
             pool = self.HAIKU_LINE_BANK_FR
-            return f"{random.choice(pool['1'])}\n{random.choice(pool['2'])}\n{random.choice(pool['3'])}"
+            return "\n\n".join(
+                f"{a}\n{b}\n{c}"
+                for a, b, c in zip(
+                    self._stanza_line_picks(pool["1"], stanzas),
+                    self._stanza_line_picks(pool["2"], stanzas),
+                    self._stanza_line_picks(pool["3"], stanzas),
+                )
+            )
 
-        line1_options = list(self.HAIKU_LINE_BANK[5])
-        line2_options = list(self.HAIKU_LINE_BANK[7])
-        line3_options = list(self.HAIKU_LINE_BANK[5])
+        # Verified subsets (lines whose syllable count agrees with the
+        # heuristic); every pick is drawn from these so the emitted counts
+        # are always correct and no literal-strings fallbacks are needed.
+        valid5 = [l for l in self.HAIKU_LINE_BANK[5] if self.count_line_syllables(l) == 5]
+        valid7 = [l for l in self.HAIKU_LINE_BANK[7] if self.count_line_syllables(l) == 7]
 
+        topic_candidate = None
         if topic:
             topic_clean = re.sub(r"[^a-zA-Z\s]", "", topic).strip().lower()
             if topic_clean:
@@ -1361,33 +1547,30 @@ class PoemWriter:
                 if syl <= 3:
                     candidate = f"{topic_clean} in the light"
                     if self.count_line_syllables(candidate) == 5:
-                        line1_options.insert(0, candidate)
+                        topic_candidate = candidate
 
-        line1 = random.choice(line1_options)
-        line2 = random.choice(line2_options)
-        line3 = random.choice(line3_options)
+        def _unused(pool, used, exclude=None):
+            candidates = [l for l in pool if l not in used and l != exclude]
+            if candidates:
+                return random.choice(candidates)
+            return random.choice(pool)
 
-        # Verify syllable counts; if our heuristic disagrees (rare, given
-        # the bank was hand-checked), fall back to safe defaults.
-        if self.count_line_syllables(line1) != 5:
-            line1 = "snow falls on the roof"
-        if self.count_line_syllables(line2) != 7:
-            line2 = "and quiet settles in close"
-        if self.count_line_syllables(line3) != 5:
-            line3 = "stars blink overhead"
-
-        # Avoid the (visually awkward) case where line 1 and line 3 end up
-        # being the exact same line - this can happen either from the
-        # random pick above (both pools share the same 5-syllable bank)
-        # or from both lines independently hitting the same syllable
-        # fallback string, so this check must run AFTER the fallback logic
-        # above, not before it.
-        if line3 == line1:
-            alternatives = [l for l in self.HAIKU_LINE_BANK[5] if l != line1]
-            if alternatives:
-                line3 = random.choice(alternatives)
-
-        return f"{line1}\n{line2}\n{line3}"
+        used = set()
+        parts = []
+        for i in range(stanzas):
+            if i == 0 and topic_candidate:
+                line1 = topic_candidate
+                line2 = _unused(valid7, used)
+                line3 = _unused(valid5, used, exclude=line1)
+            else:
+                line1 = _unused(valid5, used)
+                line2 = _unused(valid7, used)
+                line3 = _unused(valid5, used, exclude=line1)
+            if line3 == line1:
+                line3 = _unused(valid5, used, exclude=line1)
+            used.update((line1, line2, line3))
+            parts.append(f"{line1}\n{line2}\n{line3}")
+        return "\n\n".join(parts)
 
     # ---- rhyming couplets -----------------------------------------------------
 
@@ -1407,9 +1590,11 @@ class PoemWriter:
             return "un"
         return "an" if word and word[0].lower() in "aeiou" else "a"
 
-    def rhyming_couplets(self, theme: str = "general", num_couplets: int = 2, lang: str = "en") -> str:
-        """Build a short rhyming poem (AABB pattern) from the rhyme bank
-        and theme word list for whichever language was requested."""
+    def rhyming_couplets(self, theme: str = "general", num_couplets: int = 13, lang: str = "en") -> str:
+        """Build a long rhyming poem (AABB pattern, 2 lines per couplet) from
+        the rhyme bank and theme word list for whichever language was
+        requested. 13 couplets by default so the poem clears
+        POEM_MIN_LINES (26 lines)."""
         theme_words_all = self.THEME_WORDS.get(lang, self.THEME_WORDS["en"])
         theme = theme.lower().strip()
         if theme not in theme_words_all:
