@@ -10,7 +10,19 @@ from urllib.parse import urlparse
 
 WEB_HOST = os.environ.get("HOST", "0.0.0.0")
 WEB_PORT = int(os.environ.get("PORT", "8765"))
-WEB_FILES = {"/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/app.js": "app.js"}
+WEB_FILES = {
+    "/": "index.html",
+    "/index.html": "index.html",
+    "/styles.css": "styles.css",
+    "/app.js": "app.js",
+    "/favicon.ico": "favicon.ico",
+    "/favicon-16x16.png": "favicon-16x16.png",
+    "/favicon-32x32.png": "favicon-32x32.png",
+    "/favicon-180x180.png": "favicon-180x180.png",
+    "/favicon-192x192.png": "favicon-192x192.png",
+    "/favicon-512x512.png": "favicon-512x512.png",
+    "/logo-full-512.png": "logo-full-512.png",
+}
 GENERATED_DIR = Path(__file__).resolve().parent / "generated_images"
 
 
