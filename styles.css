@@ -54,14 +54,15 @@ button { cursor: pointer; }
 .menu-toggle, .mobile-close { display: none; }
 .conversation { flex: 1; width: min(860px, 100%); margin: 0 auto; padding: 72px 30px 50px; overflow: auto; }
 .welcome-block { position: relative; }
-.welcome-orbit { position: absolute; top: -17px; right: 8%; display: grid; place-items: center; width: 75px; height: 75px; border: 1px solid #d6e7d9; border-radius: 50%; transform: rotate(-12deg); }
-.welcome-orbit::before { content: ''; position: absolute; width: 9px; height: 9px; top: 2px; right: 8px; border-radius: 50%; background: var(--coral); }
+.welcome-orbit { position: absolute; top: -17px; right: 8%; display: grid; place-items: center; width: 75px; height: 75px; border: 2px solid var(--green); border-radius: 50%; transform: rotate(-12deg); }
+.welcome-orbit::before { content: ''; position: absolute; width: 9px; height: 9px; top: 2px; right: 8px; border-radius: 50%; background: var(--coral); animation: orbit-spin 8s linear infinite; }
+@keyframes orbit-spin { from { transform: rotate(0deg) translateX(28px) rotate(0deg); } to { transform: rotate(360deg) translateX(28px) rotate(-360deg); } }
 .welcome-mark { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 50%; object-fit: cover; }
 .welcome-block h2 { margin: 0; font-size: clamp(32px, 4vw, 49px); line-height: 1.08; letter-spacing: -2px; }
 .welcome-block h2 em { color: var(--green); font-family: Georgia, serif; font-weight: 400; }
 .welcome-copy { margin: 20px 0 0; color: var(--muted); font-size: 13px; }
 .suggestions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 58px; }
-.suggestion { min-height: 112px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: white; text-align: left; transition: .2s ease; }
+.suggestion { min-height: 112px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--panel); text-align: left; transition: .2s ease; }
 .suggestion:hover { border-color: #9ec4ac; box-shadow: var(--shadow); transform: translateY(-3px); }
 .suggestion-icon { display: block; margin-bottom: 13px; color: var(--coral); font-size: 18px; }
 .suggestion span:not(.suggestion-icon), .suggestion small { display: block; }
@@ -69,13 +70,13 @@ button { cursor: pointer; }
 .suggestion small { margin-top: 4px; color: var(--muted); font-size: 10px; }
 .message { display: flex; gap: 12px; margin: 26px 0; animation: appear .25s ease-out; }
 .message.user { justify-content: flex-end; }
-.message-bubble { max-width: min(620px, 80%); padding: 13px 16px; border-radius: 14px 14px 14px 3px; color: #36423d; background: #eff5ef; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+.message-bubble { max-width: min(620px, 80%); padding: 13px 16px; border-radius: 14px 14px 14px 3px; color: #1d3b30; background: var(--mint); font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
 .message.user .message-bubble { border-radius: 14px 14px 3px 14px; color: white; background: var(--green); }
-.chat-image { display: block; width: min(260px, 100%); margin-top: 12px; border-radius: 4px; background: white; }
+.chat-image { display: block; width: min(260px, 100%); margin-top: 12px; border-radius: 4px; background: var(--panel); }
 .image-download { display: inline-block; margin-top: 10px; color: var(--green); font-size: 11px; font-weight: 800; text-decoration: none; }
 .image-download:hover { text-decoration: underline; }
 .composer-wrap { width: min(860px, 100%); margin: auto; padding: 0 30px 27px; }
-.composer { display: flex; align-items: center; gap: 12px; padding: 8px 9px 8px 14px; border: 1px solid #cbd9ce; border-radius: 10px; box-shadow: 0 8px 24px rgba(31,107,81,.07); }
+.composer { display: flex; align-items: center; gap: 12px; padding: 8px 9px 8px 14px; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(31,107,81,.07); background: var(--panel); }
 .composer:focus-within { border-color: var(--green); }
 .attach-button { border: 0; color: #789087; background: transparent; font-size: 21px; }
 .composer input { min-width: 0; flex: 1; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 13px; }
