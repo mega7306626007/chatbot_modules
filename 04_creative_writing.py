@@ -448,14 +448,43 @@ class StoryTeller:
         # the same set of category keys), so "en" is as good as any to read.
         return list(self.stories["en"].keys())
 
+    # ---- story epilogues: the "what came after" paragraph ----------------
+    #
+    # Same phrase-bank idea as the openers/closers: the fixed story text
+    # ends on a poetic, open note, and this bank supplies a reflective
+    # continuation that doubles the telling's length while staying in the
+    # same literary voice. One epilogue (plus opener/closer) is layered
+    # onto every rich telling, so a ~100-word story becomes ~200+ words.
+    STORY_EPILOGUES = {
+        "en": [
+            "The years that followed were quieter, the way things tend to be after a door that was stuck for a long time finally swings open. {name} still thought about it now and then - usually at odd hours, when the world was muted and the memory was clear as the day it happened. There was no lesson to it, exactly. Just the feeling, carried for a long time, that something had been handed over and something had been received in return, and that keeping either straight mattered less than keeping both.",
+            "Nothing was ever the same in a way anyone could name. Small things shifted - a habit {name} had never noticed becoming a ritual, a name that felt different on the tongue, a route home taken a street's width wider. People around {name} assumed nothing had happened at all, and in the ordinary sense that was true. But every now and then {name} would catch the world wearing that same look, the one it had worn that day, and would know, quietly and completely, that it always had.",
+            "Later, when people asked, {name} found it difficult to tell it straight. Not because it was hard to believe - it was, a little - but because the truest version was also the simplest, and simplest is usually mistaken for invented. So {name} told it plainly, the way it happened, and let the telling stand on its own. Those who heard it properly didn't ask for proof. Those who did ask were already too far from the point to be brought back.",
+            "Every so often {name} would check, the way you check a window latch before rain: not because you expect it to be open, but because the few minutes of certainty are worth it. And every time, there it was - still true, still holding, still exactly as it had been left. Which is, when you think about it, the most remarkable thing of all. Stories are supposed to fray with time. Some of them simply declined to.",
+            "And what of the rest? The rest was ordinary, in the way that all of life is ordinary until it isn't. There were mornings and messes and minor disasters, the steady furniture of days that ask nothing of you except that you live them. {name} lived them gladly. It turned out that a life does not need to be extraordinary to be worth living; it only needs one extraordinary moment to be worth telling, and {name} had that now, and could spend a long time growing into it.",
+        ],
+        "sw": [
+            "Miaka iliyofuata ilikuwa tulivu, kama mambo yanavyokuwa baada ya mlango uliokuwa umekwama kwa muda mrefu hatimaye kufunguka. {name} bado alifikiria juu yake mara kwa mara - kwa kawaida saa zisizo za kawaida, wakati ulimwengu ulipokuwa kimya na kumbukumbu ikiwa wazi kama siku yenyewe. Hakukuwa na funzo kupita kiasi. Hisia tu, zinazobebeka kwa muda mrefu, kwamba kitu fulani kilipokelewa na kitu fulani kilirejeshwa, na kwamba kufahamu yote mawili kwa usahihi kulichukua nafasi ya kuyabeba yote mawili.",
+            "Hakuna kilichobadilika kwa jinsi mtu yeyote anavyoweza kulitaja. Mambo madogo yakabadilika - tabia {name} asiyokuwa ameigundua ikawa desturi, jina lililojisikia tofauti kwa ulimi, njia ya kurudi nyumbani ikichukuliwa kwa upana wa mtaa mmoja. Watu waliozunguka {name} walidhani hakuna kilichotokea wakati wowote, na kwa maana ya kawaida hiyo ilikuwa kweli. Lakini mara kwa mara {name} alimshika ulimwengu ukiwa na sura ile ile, ile aliyoiona siku hiyo, na akajua, kimya na kikamilifu, kwamba ulikuwa umevae siku zote.",
+            "Baadaye, watu walipouliza, {name} aliona vigumu kuisimulia moja kwa moja. Sio kwa sababu ilikuwa ngumu kuamini - ilikuwa, kidogo - bali kwa sababu toleo la kweli zaidi lilikuwa pia rahisi zaidi, na rahisi mara nyingi hudhaniwa kuwa la kubuniwa. Hivyo {name} akasimulia kwa usahihi, kama ilivyotokea, na akaacha usimulizi usimame peke yake. Wale walioisikia vizuri hawakuomba ushahidi. Wale walioomba walikuwa tayari wamejitenga na hoja hata kurejeshwa.",
+        ],
+        "fr": [
+            "Les années qui suivirent furent plus calmes, comme le sont souvent les choses après qu'une porte longtemps coincée s'est enfin ouverte. {name} y repensait encore de temps à autre - surtout aux heures insolites, quand le monde s'était tu et que le souvenir était net comme au premier jour. Il n'y avait pas de leçon à proprement parler. Juste le sentiment, porté longtemps, que quelque chose avait été transmis et que quelque chose avait été reçu en retour, et que les distinguer importait moins que de les garder tous les deux.",
+            "Rien n'avait vraiment changé d'une manière que l'on puisse nommer. De petites choses avaient bougé - une habitude jamais remarquée devenue rituel, un nom soudain différent sur la langue, un chemin de retour pris une rue plus large. Autour de {name}, on supposait qu'il ne s'était rien passé du tout, et dans un sens ordinaire c'était vrai. Mais de temps en temps {name} surprenait le monde portant ce même regard, celui de ce jour-là, et savait, doucement et entièrement, qu'il l'avait toujours porté.",
+            "Plus tard, quand on demandait, {name} avait du mal à raconter les choses simplement. Non parce que c'était difficile à croire - ça l'était, un peu - mais parce que la version la plus vraie était aussi la plus simple, et l'on prend souvent le simple pour de l'invention. Alors {name} racontait les faits tels qu'ils étaient, et laissait le récit se suffire à lui-même. Ceux qui écoutaient vraiment ne demandaient pas de preuve. Ceux qui en demandaient étaient déjà trop loin du point pour y revenir.",
+        ],
+    }
+
     def random_story(self, category: str = None, user_name: str = None, lang: str = "en", rich: bool = True):
         """
         Pick a story (optionally from a given category) and personalize
         it. When rich=True (the default), wraps the story with a
-        randomly chosen atmosphere opener/closer (see ATMOSPHERE_
-        OPENERS/NARRATOR_CLOSERS above) so repeat tellings of the same
-        story don't read identically every time - the underlying story
-        text itself is unchanged either way.
+        randomly chosen atmosphere opener, a continuation epilogue, and
+        a closer (see ATMOSPHERE_OPENERS/STORY_EPILOGUES/NARRATOR_
+        CLOSERS above) so repeat tellings of the same story don't read
+        identically every time and each telling runs roughly twice the
+        length of the raw story text - the underlying story text itself
+        is unchanged either way.
         """
         stories_for_lang = self.stories.get(lang) or self.stories["en"]
         if category and category in stories_for_lang:
@@ -478,10 +507,12 @@ class StoryTeller:
 
         if rich:
             openers = self.ATMOSPHERE_OPENERS.get(lang, self.ATMOSPHERE_OPENERS["en"])
+            epilogues = self.STORY_EPILOGUES.get(lang, self.STORY_EPILOGUES["en"])
             closers = self.NARRATOR_CLOSERS.get(lang, self.NARRATOR_CLOSERS["en"])
             opener = random.choice(openers)
+            epilogue = random.choice(epilogues).format(name=name)
             closer = random.choice(closers)
-            text = f"{opener}\n\n{text}\n\n{closer}"
+            text = f"{opener}\n\n{text}\n\n{epilogue}\n\n{closer}"
 
         return story["title"], text
 
