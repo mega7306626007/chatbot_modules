@@ -2,8 +2,8 @@
   --ink: #16211f;
   --muted: #77827c;
   --line: #e1e8e2;
-  --paper: #f7faf6;
-  --panel: #ffffff;
+  --paper: #eadbc8;
+  --panel: #f5efe6;
   --green: #1f6b51;
   --mint: #dff0e5;
   --coral: #e88468;
@@ -18,8 +18,8 @@ button { cursor: pointer; }
 .app-shell { display: flex; min-height: 100vh; }
 .sidebar { width: 276px; padding: 30px 20px 20px; background: #10231f; color: #f4f7f2; display: flex; flex-direction: column; }
 .brand-row { display: flex; align-items: center; gap: 11px; padding: 0 10px; }
-.brand-mark, .avatar { display: grid; place-items: center; color: #10231f; background: var(--yellow); font-weight: 800; }
-.brand-mark { width: 38px; height: 38px; border-radius: 12px 12px 12px 4px; font-size: 20px; }
+.brand-mark { width: 38px; height: 38px; border-radius: 12px 12px 12px 4px; object-fit: cover; }
+.avatar { display: grid; place-items: center; color: #10231f; background: var(--yellow); font-weight: 800; width: 30px; height: 30px; border-radius: 50%; font-size: 12px; }
 .eyebrow { margin: 0 0 6px; color: var(--coral); font: 500 10px 'DM Mono', monospace; letter-spacing: 1.4px; }
 .brand-row h1 { margin: 0; font-size: 19px; letter-spacing: -.5px; }
 .new-chat { width: 100%; margin: 41px 0 31px; padding: 13px 15px; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; color: white; background: rgba(255,255,255,.08); text-align: left; font-size: 13px; transition: .2s ease; }
@@ -56,7 +56,7 @@ button { cursor: pointer; }
 .welcome-block { position: relative; }
 .welcome-orbit { position: absolute; top: -17px; right: 8%; display: grid; place-items: center; width: 75px; height: 75px; border: 1px solid #d6e7d9; border-radius: 50%; transform: rotate(-12deg); }
 .welcome-orbit::before { content: ''; position: absolute; width: 9px; height: 9px; top: 2px; right: 8px; border-radius: 50%; background: var(--coral); }
-.welcome-mark { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 50%; color: white; background: var(--green); font-weight: 800; }
+.welcome-mark { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 50%; object-fit: cover; }
 .welcome-block h2 { margin: 0; font-size: clamp(32px, 4vw, 49px); line-height: 1.08; letter-spacing: -2px; }
 .welcome-block h2 em { color: var(--green); font-family: Georgia, serif; font-weight: 400; }
 .welcome-copy { margin: 20px 0 0; color: var(--muted); font-size: 13px; }
