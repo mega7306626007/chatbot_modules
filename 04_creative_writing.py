@@ -561,17 +561,76 @@ class StoryTeller:
         ],
     }
 
+    # ---- story twists: the "level 100" wild cards ------------------------
+    # Short, punchy, genre-neutral cutaways (horror / absurd / comedy) that
+    # get spliced into the rich telling when temperature is hot (>=1.5).
+    # They are deliberately out of register with the reflective voice so
+    # they land like jumpscares - the story suddenly stops behaving.
+    STORY_TWISTS = {
+        "en": [
+            "And that was when {name} noticed the thing standing at the foot of the room that had not been there a minute before - or, stranger still, had been there the entire time, simply waiting to be seen. It smiled with far too many teeth, nodded once, politely, and folded itself back into the wallpaper, leaving only a damp mark the size of a hand pressed flat against the plaster.",
+            "Later, nobody could agree on whether the ducks were related to any of it, but the ducks were definitely there - three hundred of them, in matching hats, standing in perfect rows like they had rehearsed this moment all their lives. The yellow one in the front rank winked. {name} spent years wondering what it meant, and then made peace with never knowing.",
+            "The worst part was the mayor, who arrived at {name}'s door at three in the morning holding a trophy engraved 'MOST UNLIKELY HERO' and demanded a speech. The speech lasted forty minutes, rhymed badly throughout, and concluded with the mayor presenting {name} with a live goose. Nobody has ever explained the goose. {name} keeps it still, in a pen decorated with tinsel, and has sworn off asking questions.",
+            "It should be said that the mirror in the hallway had been bought at an auction no one remembered attending, on a street that no longer exists, from a man whose name changed every time he gave it. From that night forward the reflection ran half a beat behind. That was manageable. What was not manageable was that on the night of everything, the reflection ran half a beat ahead.",
+            "And somewhere in the middle of it all, the moon - which had worn its usual expression all day - leaned a little closer to the earth, as if it, too, refused to miss whatever came next. A low murmur passed through the town, halfway between wonder and worry, and the streetlights, one by one, switched themselves off to listen.",
+            "A chicken with a story to tell is a dangerous thing. This one, perched on a fencepost halfway through the affair, narrated the whole business in perfect detail - naming names, revealing motives, describing events that had not happened yet - until the town formally voted the chicken a share of the blame. She accepted with a dignified nod, and never spoke again.",
+            "The truth about the dark was that it was not empty. {name} could feel it watching from behind every lit window, patient as a held breath, and whenever {name} turned sharply, there was nothing - just the dark folding back into the corners, pretending it had not moved. It was watching the way a cat watches a door. {name} learned, far too late, not to wonder what was waiting on the other side.",
+            "Pigeons. Ask anyone in town what actually happened and they will eventually mention the pigeons - more pigeons than could be logically accounted for, covering every roof, sign, and statue, silent, motionless, all facing the same window. All of them gone by dawn, leaving a single feather pinned to {name}'s door like a calling card.",
+        ],
+        "sw": [
+            "Na hapo ndipo {name} alipogundua kitu kilichokuwa kimesimama kwenye kona ya chumba ambacho hakikukuwepo dakika moja iliyopita - au, jambo la kushangaza zaidi, kilikuwa hapo tangu mwanzo, kikingoja kuonwa. Kilicheka kwa meno mengi mno, kikatikisa kichwa kwa adabu, kikajiingiza tena kwenye ukuta, kikiacha tu alama ya mvua kama ya mkono uliobanwa kwenye plasta.",
+            "Baadaye, hakuna aliyejua kama bata hao walihusika na hilo, lakini bata walikuwa hapo - mia tatu, wamevaa kofia zinazofanana, wamesimama kwa safu kamilifu kana kwamba wamebeenyeza wakati huo maisha yao yote. Yule wa njano mstari wa mbele alikonyeza. {name} alitumia miaka kujiuliza maana yake, kisha akakubali kamwe kutokujua.",
+            "Sehemu mbaya zaidi ilikuwa meya, ambaye alifika mlangoni mwa {name} saa tatu usiku akiwa na kombe lililoandikwa 'SHUJAA ASIYE NA NAFASI' na kudai hotuba. Hotuba ilidumu dakika arobaini, ilithibitisha mashairi kwa ubaya kutoka mwanzo hadi mwisho, na kumalizika kwa meya kumpa {name} bata bukini aliye hai. Hakuna aliyewahi kueleza bata huyo. {name} anaendelea kumweka, kwenye zizi lililopambwa tinseli, na ameapa kuacha kuuliza maswali.",
+            "Ikumbukwe kwamba kioo cha barazani kilinunuliwa kwenye mnada ambao hakuna ambaye anakumbuka kuenda, kwenye mtaa usiokuwepo sasa, kutoka kwa mtu ambaye jina lake lilikuwa likibadilika kila alipolitoa. Kuanzia usiku ule, mwonekano ulichelewa kwa nusu sekunde. Hilo lilikuwa la kuvumilika. Lisilovumilika ni kwamba usiku wa kilichotokea, mwonekano ulikuwa ukitangulia kwa nusu sekunde.",
+            "Njiwa. Ulimwuliza mtu yeyote mjini kilichotokea angefika hatimaye kwenye njiwa - wengi kuliko mantiki inavyoruhusu, wamejaa kila paa, kila alama ya duka, kila sanamu, wakimya, hawajisogelei kama sanamu wenyewe, wote wanatazama dirisha moja lile lile. Na wote wakametoweka alfajiri, wakiacha manyoya moja pekee yakiwa yamebandikwa mlangoni mwa {name} kama kadi ya kutembelea.",
+        ],
+        "fr": [
+            "Et c'est à ce moment que {name} remarqua la chose debout au bout de la pièce, qui n'était pas là une minute plus tôt - ou, plus étrange encore, qui y était depuis toujours, attendant simplement d'être vue. Elle sourit avec beaucoup trop de dents, hocha une fois la tête, poliment, et se replia dans le papier peint, ne laissant qu'une trace humide de la taille d'une main plaquée contre le plâtre.",
+            "Après coup, personne ne put dire si les canards avaient un rapport quelconque avec tout ça, mais les canards étaient bien là - trois cents, avec des chapeaux assortis, alignés en rangées parfaites comme s'ils avaient répété ce moment toute leur vie. Celui du premier rang fit un clin d'œil. {name} passa des années à se demander ce que ça voulait dire, puis fit la paix avec l'idée de ne jamais le savoir.",
+            "Le pire, ce fut le maire. Il arriva chez {name} à trois heures du matin avec un trophée gravé « HÉROS LE MOINS PROBABLE » et exigea un discours. Le discours dura quarante minutes, rimait mal du début à la fin, et s'acheva par le maire remettant à {name} une oie bien vivante. Personne n'a jamais expliqué l'oie. {name} la garde encore, dans un enclos décoré de guirlandes, et a juré d'arrêter de poser des questions.",
+            "Il faut dire que le miroir du couloir avait été acheté à une vente aux enchères à laquelle personne ne se souvenait d'avoir assisté, dans une rue qui n'existe plus, auprès d'un homme dont le nom changeait chaque fois qu'il le donnait. À partir de ce soir-là, le reflet accusa un demi-temps de retard. C'était gérable. Ce qui ne l'était pas, c'est que la nuit de tout ça, le reflet avait un demi-temps d'avance.",
+            "Les pigeons. Demandez à n'importe qui dans la ville ce qui s'est réellement passé, et il finira par parler des pigeons - plus de pigeons que la logique ne peut en compter, couvrant chaque toit, chaque enseigne, chaque statue, silencieux, immobiles comme les statues elles-mêmes, tous tournés vers la même fenêtre. Tous disparus à l'aube, ne laissant qu'une seule plume épinglée à la porte de {name} comme une carte de visite.",
+        ],
+    }
+
+    # ---- story echoes: the "long afterward" finale ------------------------
+    # Large closing reflections for the hot setting (~2x blow-up). Each one
+    # magnifies the story's strangeness into the town's permanent condition
+    # and turns 3 layers into 4, pushing a rich telling toward ~850-950
+    # words. Written so they work after ANY ending.
+    STORY_ECHOES = {
+        "en": [
+            "Here is the part of the story that nobody could sign their name to. After that night, the nights in {name}'s town started coming a little earlier and leaving a little later, like a guest who knows he has worn out his welcome but simply cannot bring himself to go. The birds learned the sound of {name}'s footsteps and sang when they heard them. The clocks ran a minute slow in every house except the one that had been empty for years, where the clock ran a minute fast, and on certain evenings - the kind that feel like a held breath - you could hear it ticking from inside the walls, keeping time for something that had not yet happened but was clearly on its way. The people told themselves it was nothing. People are good at that. They told each other ordinary things at the bakery, and walked home a little faster, and did not mention the shape they had all seen, the same shape, in their separate doorways, like it had visited each of them personally to make sure they remembered. Only {name} knew what it had wanted, and {name} spoke of it exactly twice in a lifetime, both times to people half-asleep who assumed it was a dream. The town went on. The town always goes on. That is the terrible and magnificent fact about towns - they go on, and somewhere underneath them, patient as roots, the truth of what happened waits, perfectly preserved, briefly touched by a thousand untold rumors, growing stranger every year.",
+            "In the years that followed, the affair grew into the single most disputed event in the history of the town, which is saying something, since the town had once hosted a cheese festival where the cheese itself went missing and was recovered, unharmed, at the bottom of the fountain. Every family had its version. The baker, a man of strict opinion, insisted the whole thing was the fault of a mutant watermelon he took full responsibility for; the librarian compiled a folder of three hundred pages titled 'What We Are Not Talking About' and filed it under Shadowy Events, where it was checked out exactly once by a woman who returned it with everything underlined. There were commemorative mugs. There was a song, thankfully short. {name} was offered the position of town hero, declined politely, and was instead given a parking space, which the town considered the higher honor. And on every anniversary, at exactly the moment the story first happened, every light in the town flickered all at once - not off, just sideways, like being winked at - and everyone pretended not to notice, and everyone noticed, and somewhere beneath the pavement the thing that had started it all, content at last, rolled over in its sleep and went on dreaming of them.",
+            "What no one ever managed to explain was how much the world rearranged itself afterward, as if the universe had taken the event seriously and decided to tidy up around it. The field where it began stopped growing anything but certain purple flowers that had no name in any book {name} could find. The streetlights learned to dim when passers-by were thinking too loudly, a trick no electrician could replicate or account for. Pets grew suddenly polite - grave, attentive, as though they had been told the family news before the family had. And {name}, of all weathers and moods, found that certain words now tasted different, certain songs arrived at odd hours already half-sung, and that on the quietest nights, standing at the window, there was a particular spot of sky, an exact and unremarkable patch of it, that glowed faintly, warmer than stars, like a lamp left burning somewhere between one world and the next, waiting for the day {name} would be brave enough, or finished enough, to walk over and knock.",
+        ],
+        "sw": [
+            "Na hapa kuna sehemu ya hadithi ambayo hakuna aliyejitoa kuitia saini. Baada ya usiku huo, usiku katika mji wa {name} ulianza kuja mapema kidogo na kuondoka kuchelewa kidogo, kama mgeni anayejua amekaa zaidi ya muda wake lakini kwa vyovyote hawezi kuondoka. Ndege walijifunza sauti ya nyayo za {name} na kufurahia wanapozisikia. Saa zilikwenda polepole kwa dakika moja katika kila nyumba isipokuwa ile iliyokuwa imeachwa tupu kwa miaka, ambapo saa ilienda mbele kwa dakika moja, na katika jioni fulani - za aina zinazojisikia kama pumzi iliyoshikiliwa - ungeweza kuisikia ikijipiga ndani ya kuta, ikiweka wakati kwa kitu ambacho hakijatokea bado lakini kwa hakika kilikuwa kikija. Watu walijisemea wenyewe kwamba si kitu. Watu ni wazuri katika hilo. Walisimulia mambo ya kawaida pale dukani, na kurudi nyumbani haraka kidogo, na wasitaje sura waliyoiona - sura ile ile - kila mmoja mlangoni mwake, kana kwamba ilitembelea kila mmoja binafsi ili kuwakumbusha. {name} pekee alijua ilitaka nini, na alizungumza juu yake mara mbili tu katika maisha yake yote, kila mara kwa watu waliolala nusu ambao walidhani ni ndoto. Mji uliendelea. Mji daima unaendelea. Hilo ndilo jambo la kutisha na tukufu kuhusu miji - huendelea, na mahali fulani chini yake, mvumilivu kama mizizi, ukweli wa kilichotokea unasubiri, kuhifadhiwa vizuri, kuguswa mara kwa mara na uvumi elfu usioambiwana, ukikua wa ajabu kila mwaka.",
+            "Katika miaka iliyofuata, tukio hilo likawa jambo linalozozaniwa zaidi katika historia ya mji, jambo la maana sana kwa vile mji huo ulikuwa mara moja umeandaa sherehe ya jibini ambapo jibini lenyewe lilitoweka na kupatikana, bila madhara, chini ya kisima. Kila familia ilikuwa na toleo lake. Mwokaji, mtu wa maoni thabiti, alisisitiza kwamba kosa lilikuwa la mtikiti mmoja mtafiti aliyemjibizwa; msimamizi wa maktaba alikusanya faili ya kurasa mia tatu yenye kichwa 'Vile Tusivyozungumzia' na kuiweka chini ya Mambo ya Kimya Kimya, ikitolewa mara moja tu na mwanamke aliyeirudisha ikiwa imesisitizwa kila mahali. Kulikuwa na vikombe vya ukumbusho. Kulikuwa na wimbo, wa furaha ni mfupi. {name} alipewa cheo cha shujaa wa mji, akajitoa kwa adabu, na kwa badala yake akapewa nafasi ya kuweka gari, ambayo mji uliona ni cheo cha juu zaidi. Na kila mwaka, siku hiyo hiyo wakati hadithi ilipotokea, taa zote za mji zilifumba-fumba mara moja - si kuzimika, bali kugeuka upande, kama kupigwa jicho - na kila mtu akajifanya hajaona, na kila mtu aliona, na mahali fulani chini ya lami kile kilichoanza yote, kikawa na furaha, kikageuka kitandani mwake na kuendelea kuwaota.",
+            "Jambo ambalo hakuna aliyeweza kulieleza ni jinsi ulimwengu ulivyojipanga upya baada ya hapo, kana kwamba anga zima lililichukulia tukio hilo kwa uzito na kuamua kulipangusa karibu nalo. Shamba ambako yote yalianzia liliacha kutoa chochote isipokuwa maua ya zambarau fulani ambayo hayana jina katika kitabu chochote {name} alichoweza kupata. Taa za mitaani zilijifunza kuzimwa wakati waapitaji wanafikiria kwa sauti kubwa mno, ujanja ambao hakuna fundi umeme aliyeweza kufanya au kueleza. Wanyama vipenzi wakawa wastaarabu ghafula - waadhimu, wa makini, kana kwamba wametazamia habari za familia kabla ya familia yenyewe. Na {name}, katika hali zote za hewa na hisia, aligundua kwamba maneno fulani sasa yana ladha tofauti, nyimbo fulani hufika saa zisizo za kawaida tayari zimeanza kuimbwa, na kwamba katika usiku wa kimya kabisa, akisimama dirishani, kulikuwa na kipande kimoja cha anga, pahali haswa na pasipojulikana, kilichowaka kimya kimya, kikichangamka kuliko nyota, kama taa iliyoachwa ikiwaka mahali fulani kati ya ulimwengu huu na ule, kikisubiri siku ambayo {name} atakuwa na ujasiri wa kutosha, au amekwisha vya kutosha, kuenda kukigongaga.",
+        ],
+        "fr": [
+            "Voici la partie de l'histoire que personne ne voulut signer. Après cette nuit-là, les nuits de la ville de {name} se mirent à venir un peu plus tôt et à partir un peu plus tard, comme un invité qui sait qu'il a abusé de l'hospitalité mais ne peut tout simplement pas partir. Les oiseaux apprirent le bruit des pas de {name} et chantaient en les entendant. Les horloges avançaient avec une minute de retard dans chaque maison, sauf dans celle qui restait vide depuis des années, où l'horloge avançait avec une minute d'avance, et certains soirs - ces soirs qui ressemblent à une respiration retenue - on l'entendait battre de l'intérieur des murs, comptant le temps pour quelque chose qui n'était pas encore arrivé mais qui était clairement en route. Les gens se disaient que ce n'était rien. Les gens sont très forts pour ça. Ils échangeaient des banalités à la boulangerie, rentraient un peu plus vite, et ne mentionnaient pas la forme qu'ils avaient tous vue, la même forme, dans leurs embrasures séparées, comme si elle était venue les voir personnellement pour être sûre qu'ils se souviennent. Seul {name} savait ce qu'elle voulait, et {name} en parla exactement deux fois en toute une vie, chaque fois à des gens à moitié endormis qui crurent à un rêve. La ville continua. La ville continue toujours. C'est le fait terrible et magnifique à propos des villes - elles continuent, et quelque part sous elles, patiente comme des racines, la vérité de ce qui s'est passé attend, parfaitement conservée, effleurée par mille rumeurs sans suite, devenant plus étrange chaque année.",
+            "Dans les années qui suivirent, l'affaire devint l'événement le plus contesté de l'histoire de la ville, et c'est dire, car la ville avait un jour organisé un festival du fromage où le fromage lui-même avait disparu avant d'être retrouvé, sain et sauf, au fond de la fontaine. Chaque famille avait sa version. Le boulanger, homme d'opinion stricte, jurait que tout était la faute d'une pastèque mutante dont il revendiquait tout le crédit ; la bibliothécaire constitua un dossier de trois cents pages intitulé « Ce dont nous ne parlons pas » et le rangea sous Événements Ombragés, consulté exactement une fois par une femme qui le rendit avec tout souligné. Il y eut des mugs commémoratifs. Il y eut une chanson, heureusement courte. On proposa à {name} le titre de héros de la ville ; {name} refusa poliment et reçut en échange une place de parking, que la ville jugea un honneur supérieur. Et chaque année, à l'instant précis où l'histoire avait eu lieu, toutes les lumières de la ville vacillèrent d'un coup - jamais éteintes, juste penchées, comme un clin d'œil - et chacun fit semblant de ne rien remarquer, et chacun remarqua, et quelque part sous le bitume, la chose qui avait tout déclenché, enfin apaisée, se retourna dans son sommeil et continua de rêver d'eux.",
+            "Ce que personne ne parvint jamais à expliquer, c'est à quel point le monde se réarrangea ensuite, comme si l'univers avait pris l'événement au sérieux et décidé de faire du tri autour. Le champ où tout avait commencé ne produisit plus que certaines fleurs violettes sans nom dans aucun livre que {name} pût trouver. Les réverbères apprirent à s'éteindre quand les passants pensaient trop fort, un truc qu'aucun électricien ne put reproduire ni expliquer. Les animaux devinrent soudain polis - graves, attentifs, comme s'ils avaient appris la nouvelle avant la famille elle-même. Et {name}, par tous les temps et toutes les humeurs, découvrit que certains mots avaient désormais un autre goût, que certaines chansons arrivaient à des heures étranges déjà à moitié chantées, et que dans les nuits les plus calmes, debout à la fenêtre, il y avait une certaine parcelle de ciel, un endroit précis et insignifiant, qui luisait faiblement, plus chaud que les étoiles, comme une lampe oubliée quelque part entre un monde et l'autre, attendant le jour où {name} serait assez courageux, ou assez fini, pour aller frapper.",
+        ],
+    }
+
     def random_story(self, category: str = None, user_name: str = None, lang: str = "en", rich: bool = True):
         """
         Pick a story (optionally from a given category) and personalize
-        it. When rich=True (the default), wraps the story with a
-        randomly chosen atmosphere opener, a continuation epilogue, a
-        second denouement passage, and a closer (see ATMOSPHERE_
-        OPENERS/STORY_EPILOGUES/STORY_DENOUEMENTS/NARRATOR_CLOSERS
-        above) so repeat tellings of the same story don't read
-        identically every time and each telling runs roughly twice the
-        length of the story body for a rich ~450-550-word reading - the
-        underlying story text itself is unchanged either way.
+        it. Rich tellings run "hot" (temperature defaults to 1.8) and stack up
+        to seven layers so repeat tellings of the same story never read
+        identically and each one runs ~2x the length of the pre-upgrade
+        telling:
+            opener -> body -> twist (hot) -> epilogue -> twist (hot)
+            -> denouement -> twist (hot) -> echo -> closer
+        The twists are the wild-card "level 100" cutaways (horror / absurd
+        / comedy spliced in out of register with the reflective voice);
+        the echo is a large finale that absorbs the event into the town's
+        permanent strangeness. Below temperature 1.5 the twists are skipped
+        and a cold, plain ~660-word telling is produced. The underlying
+        story text itself is unchanged either way.
         """
         stories_for_lang = self.stories.get(lang) or self.stories["en"]
         if category and category in stories_for_lang:
@@ -597,11 +656,36 @@ class StoryTeller:
             epilogues = self.STORY_EPILOGUES.get(lang, self.STORY_EPILOGUES["en"])
             denouements = self.STORY_DENOUEMENTS.get(lang, self.STORY_DENOUEMENTS["en"])
             closers = self.NARRATOR_CLOSERS.get(lang, self.NARRATOR_CLOSERS["en"])
+            twists = self.STORY_TWISTS.get(lang, self.STORY_TWISTS["en"])
+            echoes = self.STORY_ECHOES.get(lang, self.STORY_ECHOES["en"])
             opener = random.choice(openers)
             epilogue = random.choice(epilogues).format(name=name)
             denouement = random.choice(denouements).format(name=name)
+            echo = random.choice(echoes).format(name=name)
             closer = random.choice(closers)
-            text = f"{opener}\n\n{text}\n\n{epilogue}\n\n{denouement}\n\n{closer}"
+
+            pieces = [opener, text, epilogue, denouement, echo, closer]
+            if self.temperature >= 1.5:
+                # Hot generation: splice in two or three wild-card twists,
+                # one after the body, one after the epilogue and one more
+                # before the finale, so the story breaks register and
+                # ramps up hard toward the closing.
+                twist_pool = list(twists)
+                random.shuffle(twist_pool)
+                twist_a = twist_pool.pop().format(name=name) if twist_pool else ""
+                twist_b = twist_pool.pop().format(name=name) if twist_pool else ""
+                twist_c = twist_pool.pop().format(name=name) if twist_pool else ""
+                pieces = [opener, text]
+                if twist_a:
+                    pieces.append(twist_a)
+                pieces.append(epilogue)
+                if twist_b:
+                    pieces.append(twist_b)
+                pieces.append(denouement)
+                if twist_c:
+                    pieces.append(twist_c)
+                pieces.extend([echo, closer])
+            text = "\n\n".join(parts for parts in pieces if parts)
 
         return story["title"], text
 
