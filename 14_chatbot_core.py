@@ -1547,11 +1547,11 @@ class ChatBot:
         name = self.user_name()
         opener = self.story_nn.generate(
             seed_text="once upon a time",
-            max_words=90, temperature=1.0,
+            max_words=90, temperature=0.6,
         )
         closer = self.story_nn.generate(
             seed_text=f"{name} finally understood",
-            max_words=70, temperature=0.9,
+            max_words=70, temperature=0.6,
         )
         title = f"A {category or 'neural'} story from the trained network"
         body = f"{opener}\n\n{closer}" if closer else opener

@@ -537,13 +537,16 @@ def train_torch(sentences, word2id, hidden=128, embed=64, seq_len=32,
     if len(stream) < seq_len * 10:
         raise ValueError("corpus too small to train on")
 
-    # Build non-overlapping random chunk starts covering the corpus once
-    # per epoch (exactly like the numpy backend): window = seq_len token
-    # inputs shifted by one, and each "step" consumes batch such windows.
+    # Sample overlapping random windows per step (exactly like the numpy
+    # backend): each step picks batch_size random window starts, so the
+    # epoch has many more gradient updates than the non-overlapping
+    # scheme previously used (~76/epoch), which was far too few updates
+    # to learn coherent prose.
     rng = np.random.default_rng(seed)
     S = len(stream)
-    num_chunks = S // seq_len                     # non-overlapping chunks
-    steps_per_epoch = max(1, num_chunks // batch_size)
+    window = seq_len + 1                       # input window + target shift
+    steps_per_epoch = max(1, S // (window * batch_size))
+    max_start = S - window
 
     def batch_at(starts):
         xs = np.stack([stream[s:s + seq_len] for s in starts])
@@ -554,11 +557,8 @@ def train_torch(sentences, word2id, hidden=128, embed=64, seq_len=32,
     losses = []
     for epoch in range(epochs):
         total, done = 0.0, 0
-        order = rng.permutation(num_chunks)[:steps_per_epoch * batch_size]
-        for i in range(0, len(order), batch_size):
-            starts = order[i:i + batch_size]
-            if len(starts) < 2:
-                continue
+        for _ in range(min(steps_per_epoch, 2000)):
+            starts = rng.integers(0, max_start, size=batch_size)
             xs, ys = batch_at(starts)
             opt.zero_grad()
             logits = model(xs)                       # (B,T,V)
@@ -605,11 +605,11 @@ def main():
     ap.add_argument("--backend", choices=("torch", "numpy"), default="torch",
                     help="training engine: torch needs PyTorch installed, numpy is the "
                          "portable fallback (slower, used automatically if torch is missing)")
-    ap.add_argument("--epochs", type=int, default=10)
+    ap.add_argument("--epochs", type=int, default=12)
     ap.add_argument("--hidden", type=int, default=128)
     ap.add_argument("--embed", type=int, default=64)
     ap.add_argument("--seq-len", type=int, default=32)
-    ap.add_argument("--batch-size", type=int, default=512)
+    ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--max-vocab", type=int, default=8000)
     ap.add_argument("--samples", type=int, default=3,
                     help="print this many NN-generated openings after training")

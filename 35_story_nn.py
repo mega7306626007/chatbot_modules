@@ -144,11 +144,16 @@ class StoryLanguageModel:
     # Generation
     # ------------------------------------------------------------------
 
-    def generate(self, seed_text="", max_words=60, temperature=0.9, seed=None):
+    def generate(self, seed_text="", max_words=60, temperature=0.7, seed=None,
+                 rep_penalty=1.15, rep_window=8):
         """Samples ~max_words of story continuation from the learned
         distribution, seeded by seed_text (or from a bare start marker).
         Stops early on a sampled <eos>. Returns an empty string if the
-        model is unavailable."""
+        model is unavailable.
+
+        temperature < 1.0 sharpens low-probability words (rambling is
+        punished) and rep_penalty suppresses recently-sampled words so
+        the prose doesn't loop on a single phrase."""
         if not self.available():
             return ""
         import numpy as np
@@ -164,9 +169,16 @@ class StoryLanguageModel:
             _, h, c = self.next_token_logits(tid, h, c)
 
         output = list(tokens)
+        recent = []
         for _ in range(max_words):
             logits, h, c = self.next_token_logits(ids[-1], h, c)
             logits = logits / max(temperature, 1e-3)
+            # Repetition penalty: softly penalize tokens sampled recently.
+            seen = set()
+            for tok in recent[-rep_window:]:
+                if tok in self.id2word and self.id2word[tok] not in seen:
+                    seen.add(self.id2word[tok])
+                    logits[tok] -= rep_penalty * max(temperature, 1e-3)
             probs = np.exp(logits - logits.max())
             probs /= probs.sum()
             # Mask the specials so generated text stays actual prose.
@@ -183,6 +195,7 @@ class StoryLanguageModel:
                 break
             output.append(word)
             ids.append(nxt)
+            recent.append(nxt)
 
         return self._detokenize(output)
 
