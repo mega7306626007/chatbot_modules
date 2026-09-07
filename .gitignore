@@ -9,6 +9,10 @@ venv/
 chatbot.db*
 generated_images/
 model_cache/
+story_corpus/
+
+# Downloaded book corpus texts (regenerable via train_story_nn.py)
+data/
 
 # Local config - may contain keys; Render gets fresh copies or runs without them
 chatbot_llm_config.json

@@ -226,6 +226,7 @@ def run_self_test():
         "how old would i be if born on 2000-01-01",
         "is 2024 a leap year",
         "tell me a fantasy story",
+        "tell me a neural story",
         "write a haiku about the ocean",
         "write an acrostic for Jordan",
         "write a poem about love",

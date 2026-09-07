@@ -178,6 +178,13 @@ class ChatBot:
         self.clock = DateTimeEngine()
         self.storyteller = StoryTeller()
         self.poet = PoemWriter()
+        # The trained neural story generator (Section 14C): a real LSTM
+        # trained offline on the Project Gutenberg books in
+        # data/gutenberg_books.csv by train_story_nn.py. It only loads
+        # saved weights at startup - no training at runtime - and falls
+        # back to the hand-written StoryTeller banks whenever no trained
+        # model exists (see 35_story_nn.py).
+        self.story_nn = StoryLanguageModel()
         self.fun = FunExtras()
         self.text_tools = TextTools()
         self.number_tools = NumberTools()
@@ -946,6 +953,16 @@ class ChatBot:
             self._handle_tell_story,
         )
         e.register("list_story_categories", [r"\bwhat (stories|story categories) do you have\b", r"\blist stor(y|ies)\b"], self._handle_list_story_categories)
+        e.register(
+            "tell_nn_story",
+            [
+                r"\btell me a (neural|nn|ai|gutenberg) story\b",
+                r"\bgenerate (a |an )(neural|nn|ai|machine.?learned) story\b",
+                r"\bneural network story\b",
+                r"\bstory from the neural network\b",
+            ],
+            self._handle_tell_nn_story,
+        )
 
         # --- Poems ---
         e.register("write_acrostic", [r"\b(write|make|create) (an? )?acrostic( poem)?\s*(for|about|using)?\s*(.*)"], self._handle_write_acrostic)
@@ -1508,6 +1525,37 @@ class ChatBot:
         title, body = result
         wrapped = "\n".join(textwrap.wrap(body, width=78, replace_whitespace=False) if False else body.split("\n"))
         return f"📖 {title}\n\n{body}"
+
+    def _handle_tell_nn_story(self, text, m):
+        """Neural-network story (Section 14C): samples continuation prose
+        from the LSTM trained offline on the Gutenberg books. Falls back
+        to the hand-written StoryTeller banks (with a clear note) if the
+        trained model hasn't been produced by train_story_nn.py yet."""
+        if not self.story_nn.available():
+            return ("I don't have a trained story network yet - run "
+                    "train_story_nn.py to build one from data/gutenberg_books.csv. "
+                    "Here's a regular story meanwhile:\n\n"
+                    + self._handle_tell_story(text, m))
+        category = None
+        text_lower = text.lower()
+        for cat in self.storyteller.categories():
+            if cat in text_lower:
+                category = cat
+                break
+        if "sci-fi" in text_lower or "science fiction" in text_lower:
+            category = "scifi"
+        name = self.user_name()
+        opener = self.story_nn.generate(
+            seed_text="once upon a time",
+            max_words=90, temperature=1.0,
+        )
+        closer = self.story_nn.generate(
+            seed_text=f"{name} finally understood",
+            max_words=70, temperature=0.9,
+        )
+        title = f"A {category or 'neural'} story from the trained network"
+        body = f"{opener}\n\n{closer}" if closer else opener
+        return f"🧠 {title}\n\n{body}"
 
     def _handle_list_story_categories(self, text, m):
         cats = ", ".join(self.storyteller.categories())

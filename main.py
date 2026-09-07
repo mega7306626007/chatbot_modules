@@ -28,6 +28,17 @@ or `--test`.
 import os
 import sys
 
+# Several bot replies contain emoji (e.g. the 📖 story header). On Windows
+# the console defaults to a legacy code page (cp1252) that can't encode
+# them, so print() raises UnicodeEncodeError and kills the session. Force
+# UTF-8 on the standard streams up front so output never crashes.
+for _stream in (sys.stdout, sys.stderr):
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 _MODULE_FILES = [
@@ -58,6 +69,10 @@ _MODULE_FILES = [
     "31_word_games.py",
     "33_web_server.py",
     "34_offline_scene_generator.py",
+    # Trained neural story generator (Section 14C) - loads model_cache/
+    # weights at runtime; must load before 14_chatbot_core.py which
+    # instantiates StoryLanguageModel in ChatBot.__init__.
+    "35_story_nn.py",
     # 13_response_banks_loader.py handled separately below (it loads a
     # whole subfolder, not a single file)
     "14_chatbot_core.py",
@@ -103,4 +118,3 @@ if __name__ == "__main__":
     # __name__ == "__main__", so it fires automatically as part of the
     # exec below - no extra dispatch code needed here.
     _load_all()
-pip
