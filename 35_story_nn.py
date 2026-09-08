@@ -145,8 +145,9 @@ class StoryLanguageModel:
     # ------------------------------------------------------------------
 
     def generate(self, seed_text="", max_words=60, temperature=0.6, seed=None,
-                 rep_penalty=1.2, rep_window=10,
-                 top_k=100, top_p=0.90, min_sentence_words=25):
+                 rep_penalty=1.4, rep_window=12,
+                 top_k=100, top_p=0.90, min_sentence_words=25,
+                 block_ngrams=True):
         """Samples a short coherent passage from the learned distribution,
         seeded by seed_text (or from a bare start marker). Stops on a
         sampled <eos>, or at the first sentence-ending punctuation after
@@ -156,8 +157,10 @@ class StoryLanguageModel:
 
         temperature < 1.0 sharpens the distribution; rep_penalty
         suppresses recently-sampled words to avoid loops; top_k/top_p
-        (nucleus) sampling cut the long ungrammatical tail of the vocab
-        so ordinary words keep the story grounded."""
+        (nucleus) sampling cut the long ungrammatical tail of the vocab;
+        block_ngrams hard-bans any candidate continuation that would
+        complete a trigram already seen in the passage, which kills the
+        "and the other and the other" style loops small models fall into."""
         if not self.available():
             return ""
         import numpy as np
@@ -189,16 +192,26 @@ class StoryLanguageModel:
                     logits[self.word2id[sp]] = -1e9
             # Nucleus (top-p) + top-k truncation: drop the long tail of
             # near-zero-probability words that make small models ramble.
+            soft = np.exp(logits - logits.max())
+            soft /= soft.sum()
             order = np.argsort(-logits)
             kept = np.zeros_like(logits, dtype=bool)
             s = 0.0
-            for j in order:
+            for rank, j in enumerate(order):
                 kept[j] = True
-                p = np.exp(logits[j] - logits.max())
-                s += p
-                if j >= top_k or s >= top_p:
+                s += soft[j]
+                if rank >= top_k or s >= top_p:
                     break
             logits = np.where(kept, logits, -1e9)
+            # Hard trigram block: refuse any candidate that completes a
+            # 3-gram already used in the passage, so generation must keep
+            # making progress instead of looping on a phrase.
+            if block_ngrams and len(recent) >= 2:
+                prefix = tuple(ids[-2:])
+                for w in set(recent):
+                    if any(recent[k:k + 3] == (*prefix, w)
+                           for k in range(len(recent) - 2)):
+                        logits[w] = -1e9
             probs = np.exp(logits - logits.max())
             probs /= probs.sum()
             total = probs.sum()

@@ -46,7 +46,7 @@ import urllib.request
 # ---------------------------------------------------------------------------
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_BOOKS_CSV = os.path.join(HERE, "data", "gutenberg_books.csv")
+DEFAULT_BOOKS_CSV = os.path.join(HERE, "data", "fairy_tales.csv")
 DEFAULT_CORPUS_DIR = os.path.join(HERE, "story_corpus")
 DEFAULT_OUT_WEIGHTS = os.path.join(HERE, "model_cache", "story_nn.npz")
 DEFAULT_OUT_VOCAB = os.path.join(HERE, "model_cache", "story_nn_vocab.json")
