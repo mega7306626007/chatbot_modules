@@ -144,16 +144,20 @@ class StoryLanguageModel:
     # Generation
     # ------------------------------------------------------------------
 
-    def generate(self, seed_text="", max_words=60, temperature=0.7, seed=None,
-                 rep_penalty=1.15, rep_window=8):
-        """Samples ~max_words of story continuation from the learned
-        distribution, seeded by seed_text (or from a bare start marker).
-        Stops early on a sampled <eos>. Returns an empty string if the
-        model is unavailable.
+    def generate(self, seed_text="", max_words=60, temperature=0.6, seed=None,
+                 rep_penalty=1.2, rep_window=10,
+                 top_k=100, top_p=0.90, min_sentence_words=25):
+        """Samples a short coherent passage from the learned distribution,
+        seeded by seed_text (or from a bare start marker). Stops on a
+        sampled <eos>, or at the first sentence-ending punctuation after
+        at least min_sentence_words, so the prose never trails off in the
+        middle of a sentence. Returns an empty string if the model is
+        unavailable.
 
-        temperature < 1.0 sharpens low-probability words (rambling is
-        punished) and rep_penalty suppresses recently-sampled words so
-        the prose doesn't loop on a single phrase."""
+        temperature < 1.0 sharpens the distribution; rep_penalty
+        suppresses recently-sampled words to avoid loops; top_k/top_p
+        (nucleus) sampling cut the long ungrammatical tail of the vocab
+        so ordinary words keep the story grounded."""
         if not self.available():
             return ""
         import numpy as np
@@ -179,12 +183,24 @@ class StoryLanguageModel:
                 if tok in self.id2word and self.id2word[tok] not in seen:
                     seen.add(self.id2word[tok])
                     logits[tok] -= rep_penalty * max(temperature, 1e-3)
-            probs = np.exp(logits - logits.max())
-            probs /= probs.sum()
             # Mask the specials so generated text stays actual prose.
             for sp in (PAD, UNK, BOS, EOS):
                 if sp in self.word2id:
-                    probs[self.word2id[sp]] = 0.0
+                    logits[self.word2id[sp]] = -1e9
+            # Nucleus (top-p) + top-k truncation: drop the long tail of
+            # near-zero-probability words that make small models ramble.
+            order = np.argsort(-logits)
+            kept = np.zeros_like(logits, dtype=bool)
+            s = 0.0
+            for j in order:
+                kept[j] = True
+                p = np.exp(logits[j] - logits.max())
+                s += p
+                if j >= top_k or s >= top_p:
+                    break
+            logits = np.where(kept, logits, -1e9)
+            probs = np.exp(logits - logits.max())
+            probs /= probs.sum()
             total = probs.sum()
             if total <= 0:
                 break
@@ -196,6 +212,9 @@ class StoryLanguageModel:
             output.append(word)
             ids.append(nxt)
             recent.append(nxt)
+            # End the passage at a complete sentence once it's long enough.
+            if (len(output) - len(tokens)) >= min_sentence_words and word in ".!?":
+                break
 
         return self._detokenize(output)
 
