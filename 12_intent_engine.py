@@ -34,8 +34,9 @@ class IntentEngine:
     be registered before more general "catch-all" ones.
     """
 
-    def __init__(self):
+    def __init__(self, normalizer=None):
         self.intents = []
+        self.normalizer = normalizer
         # Tracks the name of the last intent whose pattern matched and
         # whose handler returned a non-None response, WITHOUT changing
         # handle()'s return type - used by ChatBot.respond() to power
@@ -50,7 +51,13 @@ class IntentEngine:
 
         Note: handler is already a bound method (e.g. self._handle_greeting),
         so it only needs (text, match) - bot is implicit via the binding.
+
+        When a FlexiblePhraseNormalizer is attached, loose natural phrasing
+        is rewritten to canonical triggers here FIRST, so users can type
+        flexibly without each intent needing a dozen pattern variants.
         """
+        if self.normalizer is not None:
+            text = self.normalizer.normalize(text)
         for intent in self.intents:
             m = intent.match(text)
             if m:
@@ -59,6 +66,228 @@ class IntentEngine:
                     self.last_matched_intent = intent.name
                     return response
         return None
+
+
+# ==============================================================================
+# SECTION 7A1A: FLEXIBLE PHRASE NORMALIZER (offline, no ML, adds typing freedom)
+# ==============================================================================
+#
+# The intent engine above is deliberately rigid (explicit regex triggers
+# per tool). This normalizer is the "make the regex better" layer: it runs
+# on every message right before matching and rewrites loose, natural
+# phrasing into canonical forms the existing intents already understand -
+# fully offline and deterministic, exactly like the typo corrector next to
+# it, and completely orthogonal to the optional LLM hybrid.
+#
+# It does four things, each conservative and fail-open (if nothing applies,
+# the text passes through untouched and matching behaves exactly as before):
+#
+#   1. Strips leading conversational filler ("please", "can you",
+#      "okay", "so", ...) that carries no intent meaning.
+#   2. Converts English number words to digits ("sixteen" -> 16,
+#      "twenty one" -> 21, "three point five" -> 3.5) and common math
+#      words to symbols ("times" -> *, "divided by" -> /, "squared" -> ^2)
+#      - ONLY when the message actually looks like math, so normal chat
+#      is never mangled.
+#   3. Maps loose tool-request phrasings onto the exact triggers the
+#      rigid handlers already match ("make me a story" -> "tell me a
+#      story", "crack a joke" -> "tell me a joke", ...).
+#   4. Normalizes a few very common casual descriptors ("how is the
+#      weather in X", "i want to know the time").
+#
+# Handlers that extract payload text VERBATIM (ciphers, markdown tables,
+# ASCII banners) already re-read the untouched original from
+# ChatBot._current_raw_text rather than the matched text, so rewriting
+# here can never corrupt user payloads.
+class FlexiblePhraseNormalizer:
+    """Rewrites flexible natural phrasing into canonical forms the rigid
+    regex intents already understand. Deterministic, offline, fail-open."""
+
+    # --- Leading filler prefixes (never trigger words themselves) ---
+    FILLER_RE = re.compile(
+        r"^\s*(?:please\s+)?(?:can you|could you|would you|will you)"
+        r"(?:\s+please)?\s+"
+        r"|^\s*please\s+"
+        r"|^\s*(?:okay|ok|so|um|hmm|hmm,|uh|right|alright),?\s+"
+        r"|^\s*(?:i want to|i'?d like to|i need to|i would like to)\s+",
+        re.IGNORECASE,
+    )
+
+    # --- Math-signal words: if absent, math-rewrites are skipped entirely ---
+    MATH_SIGNAL_RE = re.compile(
+        r"\d|times|multiplied|multiply|plus|minus|subtract|divided|divide|"
+        r"squared|cubed|power|percent|square root|sqrt|log|ln|"
+        r"calculate|compute|equation|solve|integrate|derive|derivative|over\b",
+        re.IGNORECASE,
+    )
+
+    _ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven",
+             "eight", "nine"]
+    _TEENS = ["ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+              "sixteen", "seventeen", "eighteen", "nineteen"]
+    _TENS = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy",
+             "eighty", "ninety"]
+    _NUMBER_WORDS = set(_ONES) | set(_TEENS) | set(_TENS) | {"hundred", "thousand"}
+
+    # --- Math word -> symbol (applied only when a math signal fired) ---
+    MATH_WORD_SYMBOLS = [
+        (r"\bmultiplied by\b", "*"),
+        (r"\btimes\b", "*"),
+        (r"\bdivided by\b", "/"),
+        (r"\bto the power of\b", "^"),
+        (r"\bpower\b", "^"),
+        (r"\bplus\b", "+"),
+        (r"\bminus\b", "-"),
+        (r"\bminus\b", "-"),
+        (r"\bsubtract\b", "-"),
+        (r"\btake away\b", "-"),
+        (r"\bsquared\b", "^2"),
+        (r"\bcubed\b", "^3"),
+    ]
+
+    # --- Loose tool phrasing -> canonical trigger (word-boundary safe) ---
+    PHRASE_SWAPS = [
+        # stories
+        (r"\bmake (?:me )?(?:a |an? )?story\b", "tell me a story"),
+        (r"\bwrite (?:me )?(?:a |an? )?story\b", "tell me a story"),
+        (r"\bcreate (?:me )?(?:a |an? )?story\b", "tell me a story"),
+        (r"\bmake up (?:a |an? )?story\b", "tell me a story"),
+        (r"\btell me a tale\b", "tell me a story"),
+        (r"\bwrite me a tale\b", "tell me a story"),
+        (r"\bmake (?:me )?(?:a |an? )?poem\b", "write me a poem"),
+        (r"\bwrite (?:me )?some poetry\b", "write me a poem"),
+        # jokes / quotes / riddles
+        (r"\bcrack (?:me )?(?:a |an? )?joke\b", "tell me a joke"),
+        (r"\btell (?:me )?something funny\b", "tell me a joke"),
+        (r"\bsay a quote\b", "tell me a quote"),
+        (r"\bshare (?:a |an? )?quote\b", "tell me a quote"),
+        (r"\bgive me some wisdom\b", "tell me a quote"),
+        (r"\briddle me this\b", "tell me a riddle"),
+        # images
+        (r"\bgenerate (?:a |an? )?picture of\b", "generate image of"),
+        (r"\bgenerate (?:a |an? )?photo of\b", "generate image of"),
+        (r"\bmake (?:me )?(?:a |an? )?(?:picture|photo|image) of\b", "generate image of"),
+        (r"\bcreate (?:a |an? )?(?:picture|photo) of\b", "generate image of"),
+        # weather
+        (r"\bhow is the weather (in|at|for)\b(.+)", r"weather in\2"),
+        # casual time/date/name knowledge asks
+        (r"\b(?:i want to know|i'?d like to know|can you tell me|could you tell me) (?:the )?time\b",
+         "what time is it"),
+        (r"\b(?:i want to know|i'?d like to know|can you tell me|could you tell me) (?:today'?s |the )?date\b",
+         "what's today's date"),
+        (r"\b(?:i want to know|i'?d like to know|can you tell me|could you tell me) my name\b",
+         "what is my name"),
+    ]
+
+    # --- Verb-object pairs that reset the normalizer's question until the
+    #     filler strip above runs - placeholder for future expansion ---
+
+    def _number_word_value(self, word):
+        if word in self._ONES:
+            return self._ONES.index(word)
+        if word in self._TEENS:
+            return 10 + self._TEENS.index(word)
+        if word in self._TENS:
+            return (self._TENS.index(word) + 2) * 10
+        return None
+
+    def _number_run_to_digits(self, tokens):
+        """Converts a maximal run of number-word tokens (possibly with
+        'and' connectors and 'point' decimals) to a digit string, or
+        returns None if the run isn't a clean number phrase."""
+        total = 0
+        current = 0
+        i = 0
+        while i < len(tokens):
+            w = tokens[i]
+            if w == "point":
+                frac = ""
+                j = i + 1
+                while j < len(tokens) and tokens[j] in self._ONES:
+                    frac += str(self._ONES.index(tokens[j]))
+                    j += 1
+                integer = total + current
+                return f"{integer}.{frac}" if frac else str(integer)
+            if w == "and":
+                i += 1
+                continue
+            if w == "hundred":
+                current = (current or 1) * 100
+            elif w == "thousand":
+                total = (total + current) * 1000
+                current = 0
+            else:
+                v = self._number_word_value(w)
+                if v is None:
+                    return None
+                current += v
+            i += 1
+        return str(total + current)
+
+    def _has_math_signal(self, text: str) -> bool:
+        return bool(self.MATH_SIGNAL_RE.search(text))
+
+    def _convert_number_words(self, text: str) -> str:
+        words = text.split(" ")
+        result = []
+        i = 0
+        n = len(words)
+        while i < n:
+            bare = words[i].strip(".,;:!?()").lower()
+            if bare in self._NUMBER_WORDS or bare == "point":
+                run = []
+                j = i
+                while j < n:
+                    bj = words[j].strip(".,;:!?()").lower()
+                    if bj in self._NUMBER_WORDS or bj in ("point", "and"):
+                        run.append(words[j])
+                        j += 1
+                    else:
+                        break
+                digits = self._number_run_to_digits(
+                    [t.strip(".,;:!?()") for t in run])
+                if digits is not None and digits != run[0].strip(".,;:!?()").lower():
+                    trailing_punct = re.search(r"[.,;:!?]+$", words[j - 1])
+                    result.append(digits + (trailing_punct.group(0) if trailing_punct else ""))
+                    i = j
+                    continue
+            result.append(words[i])
+            i += 1
+        return " ".join(result)
+
+    def _convert_math_words(self, text: str) -> str:
+        lowered = text
+        for pattern, symbol in self.MATH_WORD_SYMBOLS:
+            lowered = re.sub(pattern, symbol, lowered, flags=re.IGNORECASE)
+        return lowered
+
+    def _apply_phrase_swaps(self, text: str) -> str:
+        lowered = text
+        for pattern, replacement in self.PHRASE_SWAPS:
+            lowered = re.sub(pattern, replacement, lowered, flags=re.IGNORECASE)
+        return lowered
+
+    def normalize(self, text: str) -> str:
+        """Rewrites flexible phrasing toward canonical forms. Fail-open:
+        anything not recognized passes through byte-identical."""
+        if not text:
+            return text
+
+        # 1. Math rewrites - gated on a math signal so everyday prose is
+        #    never touched, and done FIRST so "six times four" becomes
+        #    "6 * 4" before filler/other passes.
+        if self._has_math_signal(text):
+            text = self._convert_number_words(text)
+            text = self._convert_math_words(text)
+
+        # 2. Loose tool phrasings -> canonical triggers.
+        text = self._apply_phrase_swaps(text)
+
+        # 3. Leading conversational filler (after swaps, so canonical
+        #    triggers like "give me a riddle" are never stripped).
+        text = self.FILLER_RE.sub("", text, count=1).strip()
+
+        return text
 
 
 # ==============================================================================

@@ -338,7 +338,8 @@ class ChatBot:
         self.countdowns = CountdownDashboard(self.memory)
         self.word_scramble = WordScrambleGame(self.typo_corrector._known_words)
         self.anagram_solver = AnagramSolver(self.typo_corrector._known_words)
-        self.engine = IntentEngine()
+        self.routing_normalizer = FlexiblePhraseNormalizer()
+        self.engine = IntentEngine(self.routing_normalizer)
         self.running = True
         self.last_topic = None
         self._register_intents()
@@ -1025,8 +1026,8 @@ class ChatBot:
                 # "solve x^2 - 4", "derive x^3 + 5*x", "integrate x^2"
                 r"^\s*(?:what('?s| is)\s+)?(?:solve|derive|derivative|differentiate|integrate)\b.+$",
                 # "500 times 4 plus 25", "7 squared minus 3", "2 + 3 * 4"
-                r"^\s*(?:what('?s| is)\s+|calculate\s+|compute\s+)?\d+(?:\.\d+)?\s*(?:\*\*|\^|[+\-*/x×÷])\s*\S.+$",
-                r"^\s*(?:what('?s| is)\s+|calculate\s+|compute\s+)?\d+(?:\.\d+)?\s+(?:plus|minus|times|multiplied by|divided by|over|to the power of|squared|cubed)\s*\S.+$",
+                r"^\s*(?:what('?s| is)\s+|calculate\s+|compute\s+)?\d+(?:\.\d+)?\s*(?:\*\*|\^|[+\-*/x×÷])\s*.+$",
+                r"^\s*(?:what('?s| is)\s+|calculate\s+|compute\s+)?\d+(?:\.\d+)?\s+(?:plus|minus|times|multiplied by|divided by|over|to the power of|squared|cubed)\s*.+$",
                 # expression with a variable and exponent/equation: "x^2 - 9"
                 r"^\s*(?:what('?s| is)\s+)?[a-z]\s*(?:\*\*|\^)\s*(?:\(|\d+).+$",
             ],
