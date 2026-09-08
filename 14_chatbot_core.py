@@ -331,6 +331,7 @@ class ChatBot:
         self.dice_roller = DiceRoller()
         self.cipher_tools = CipherTools()
         self.tip_calculator = TipCalculator()
+        self.flexible_calculator = FlexibleScientificCalculator()
         self.name_generator = NameGenerator()
         self.ascii_art = AsciiArtGenerator()
         self.markdown_formatter = MarkdownTableFormatter()
@@ -1013,6 +1014,24 @@ class ChatBot:
             [r"\bpercent change from\s+(-?\d+(?:\.\d+)?)\s+to\s+(-?\d+(?:\.\d+)?)\b"],
             self._handle_percent_change,
         )
+        # Flexible natural-text math (Section 3B2): the conversational
+        # SymPy-backed calculator. Registered AFTER the rigid math intents
+        # above, so narrow patterns ("square root of 16") keep winning, and
+        # the flex handler returns None for non-math text, letting the
+        # whole intent chain continue undisturbed.
+        e.register(
+            "flexible_math",
+            [
+                # "solve x^2 - 4", "derive x^3 + 5*x", "integrate x^2"
+                r"^\s*(?:what('?s| is)\s+)?(?:solve|derive|derivative|differentiate|integrate)\b.+$",
+                # "500 times 4 plus 25", "7 squared minus 3", "2 + 3 * 4"
+                r"^\s*(?:what('?s| is)\s+|calculate\s+|compute\s+)?\d+(?:\.\d+)?\s*(?:\*\*|\^|[+\-*/x×÷])\s*\S.+$",
+                r"^\s*(?:what('?s| is)\s+|calculate\s+|compute\s+)?\d+(?:\.\d+)?\s+(?:plus|minus|times|multiplied by|divided by|over|to the power of|squared|cubed)\s*\S.+$",
+                # expression with a variable and exponent/equation: "x^2 - 9"
+                r"^\s*(?:what('?s| is)\s+)?[a-z]\s*(?:\*\*|\^)\s*(?:\(|\d+).+$",
+            ],
+            self._handle_flexible_math,
+        )
         e.register(
             "text_case_convert",
             [r"\bconvert\s+(.+?)\s+to\s+(snake|kebab|camel|pascal|title|upper|lower)\s*case\b",
@@ -1688,6 +1707,17 @@ class ChatBot:
             return "Percent change from zero is undefined."
         direction = "an increase" if result >= 0 else "a decrease"
         return f"That's {direction} of {abs(result):.2f}% (from {old_value:g} to {new_value:g})."
+
+    def _handle_flexible_math(self, text, m):
+        """Delegates natural-language math to the SymPy-backed
+        FlexibleScientificCalculator (Section 3B2). Returns None (and
+        lets the intent chain continue) whenever the flex parser can't
+        cleanly interpret the text or SymPy isn't installed - so this
+        broad intent never hijacks non-math messages."""
+        payload = self.flexible_calculator.calculate(text)
+        if payload is None:
+            return None
+        return _format_flexible_result(payload)
 
     # ---- text case converter + password generator handlers (Section 3C/3D) -
 

@@ -375,6 +375,20 @@ try:
 except ImportError:
     OPENCV_AVAILABLE = False
 
+# SymPy is OPTIONAL and powers the FLEXIBLE natural-text scientific
+# calculator (Section 3B2) - conversational math ("what is 500 times
+# 4 plus 25?"), symbolic equation solving ("solve x^2 - 4"), symbolic
+# differentiation/integration ("derive x^3 + 5*x"), and user-defined
+# variables ("radius = 10" then "pi * radius^2"). If SymPy isn't
+# installed, the feature degrades gracefully: the rigid single-argument
+# handlers (Section 3B) keep working exactly as before, and the flexible
+# calculator simply steps aside instead of crashing.
+try:
+    import sympy as sp
+    SYMPY_AVAILABLE = True
+except ImportError:
+    SYMPY_AVAILABLE = False
+
 
 # ==============================================================================
 # SECTION 1: GLOBAL CONFIGURATION

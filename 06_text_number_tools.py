@@ -429,6 +429,210 @@ class ScientificCalculator:
 
 
 # ==============================================================================
+# SECTION 3B2: FLEXIBLE NATURAL-TEXT SCIENTIFIC CALCULATOR (SymPy-backed)
+# ==============================================================================
+#
+# The rigid ScientificCalculator above handles ONE recognized pattern per
+# operation. This companion class is the conversational upgrade: it accepts
+# natural, flexible English phrasing ("What is 500 times 4 plus 25?"), chains
+# full expressions ("2 + 3 * 4"), solves symbolic equations ("solve x^2 - 4"),
+# differentiates/integrates symbolically ("derive x^3 + 5*x"), and remembers
+# user-defined variables ("radius = 10" then "pi * radius^2").
+#
+# Safety: it deliberately uses SymPy's sandboxed sympify() with an explicit
+# allow-list of symbols (x, pi, e, ans, sqrt, log, simplify, solve, diff,
+# integrate) - NOT Python's eval(). Unrecognized text returns None so the
+# chatbot's outer intent chain can fall through to other handlers.
+#
+# Dependency guard: if SymPy isn't installed (SYMPY_AVAILABLE == False),
+# every method degrades gracefully to None instead of raising - callers
+# keep the rigid calculator path and nothing crashes.
+class FlexibleScientificCalculator:
+    """Natural-text, symbolic scientific calculator backed by SymPy."""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        """Clears user-defined variables and the last-answer slot."""
+        self.variables = {}
+        self.ans = sp.Integer(0) if SYMPY_AVAILABLE else 0
+
+    def _make_symbols(self):
+        """Builds the SymPy sandbox namespace. Only called when SymPy is available."""
+        x = sp.Symbol("x")
+        symbols = {
+            "x": x,
+            "pi": sp.pi,
+            "e": sp.E,
+            "ans": self.ans,
+            "sqrt": sp.sqrt,
+            "log": sp.log,
+            "simplify": sp.simplify,
+            "solve": lambda expr: sp.solve(expr, x),
+            "diff": lambda expr: sp.diff(expr, x),
+            "integrate": lambda expr: sp.integrate(expr, x),
+        }
+        symbols.update(self.variables)
+        return symbols
+
+    def clean_conversational_text(self, text: str) -> str:
+        """Strips conversational fluff and maps natural English math
+        words onto real mathematical symbols so the expression engine
+        can process them (see the standalone run_flexible_calculator
+        prototype this was adapted from)."""
+        if not SYMPY_AVAILABLE:
+            return text
+
+        cleaned = text.lower().strip()
+
+        # Remove polite conversational fluff words/phrases
+        fluff_phrases = [
+            "what is", "calculate", "compute", "figure out", "evaluate",
+            "please", "can you", "show me", "the equation", "the derivative of",
+        ]
+        for fluff in fluff_phrases:
+            cleaned = cleaned.replace(fluff, "")
+
+        # Clean up hanging question marks or punctuation
+        cleaned = cleaned.replace("?", "").replace(",", "").strip()
+
+        # Map natural English math words directly to real mathematical symbols
+        word_mappings = {
+            " times ": " * ",
+            " multiplied by ": " * ",
+            " divided by ": " / ",
+            " plus ": " + ",
+            " minus ": " - ",
+            " squared": " ^ 2",
+            " cubed": " ^ 3",
+            " to the power of ": " ^ ",
+            " over ": " / ",
+        }
+        for word, symbol in word_mappings.items():
+            cleaned = cleaned.replace(word, symbol)
+
+        # Smart Trigger: "solve x^2 - 4" -> solve(x^2 - 4)
+        if cleaned.startswith("solve "):
+            expr_to_solve = cleaned.replace("solve ", "", 1).strip()
+            # If they forgot to say '= 0', assume they want the roots
+            if "=" in expr_to_solve:
+                parts = expr_to_solve.split("=")
+                expr_to_solve = f"({parts[0]}) - ({parts[1]})"
+            cleaned = f"solve({expr_to_solve})"
+
+        # Smart Trigger: "derive 3*x" -> diff(3*x)
+        elif cleaned.startswith("derive ") or cleaned.startswith("derivative "):
+            expr_to_diff = (
+                cleaned.replace("derive ", "", 1).replace("derivative ", "", 1).strip()
+            )
+            cleaned = f"diff({expr_to_diff})"
+
+        # Smart Trigger: "integrate x^2" -> integrate(x^2)
+        elif cleaned.startswith("integrate "):
+            cleaned = f"integrate({cleaned.replace('integrate ', '', 1).strip()})"
+
+        return cleaned
+
+    @staticmethod
+    def _is_bad_math_value(output) -> bool:
+        """True when SymPy produced an undefined/infinite result
+        (division by zero yields 'zoo'/complex infinity, 1/0 yields
+        'oo', 0/0 yields 'nan') instead of a real number. These get a
+        friendly error rather than a raw SymPy literal like 'zoo'."""
+        return (
+            output is sp.nan
+            or output == sp.zoo
+            or output == sp.oo
+            or output == -sp.oo
+        )
+
+    def calculate(self, text: str):
+        """Parses natural-language math text and returns the resulting
+        value (or None if the text isn't interpretable, so callers fall
+        through to other handlers). Persists user-defined variables and
+        the last-answer slot between calls."""
+        if not SYMPY_AVAILABLE:
+            return None
+        if not text or not text.strip():
+            return None
+
+        user_input = text.strip()
+        math_portion = user_input
+        is_assignment = False
+        target_variable = ""
+
+        # Variable assignment: "radius = 10" / "what is radius = 10"
+        if "=" in user_input and not any(op in user_input for op in ("==", "<=", ">=")):
+            parts = user_input.split("=", 1)
+            target_variable = (
+                parts[0].replace("what is", "").replace("set", "").strip().lower()
+            )
+            # Only letters, and never overwrite core system symbols
+            if target_variable.isalpha() and target_variable not in ("pi", "e", "ans", "x"):
+                is_assignment = True
+                math_portion = parts[1]
+            else:
+                return None
+
+        # Run the natural-language text cleaning layer
+        cleaned_math = self.clean_conversational_text(math_portion)
+
+        # Map remaining user-friendly symbols over to native code logic
+        compiled_expr = cleaned_math.replace("^", "**")
+
+        # Handle automatic chaining if the expression starts with an operator
+        if compiled_expr and compiled_expr[0] in ("+", "-", "*", "/"):
+            compiled_expr = "ans" + compiled_expr
+
+        try:
+            symbols = self._make_symbols()
+            resolved_output = sp.sympify(compiled_expr, locals=symbols)
+
+            # Evaluate any macro functions that were called
+            if callable(resolved_output):
+                resolved_output = resolved_output()
+
+            # Division by zero (and friends) isn't a real answer - report
+            # it cleanly and skip updating ans/variables.
+            if self._is_bad_math_value(resolved_output):
+                return {"kind": "error",
+                        "value": "That calculation isn't defined - you can't divide by zero."}
+
+            if is_assignment:
+                # Stringify cleanly for stable storage/reporting
+                self.variables[target_variable] = resolved_output
+                return {"kind": "assignment", "name": target_variable,
+                        "value": resolved_output}
+            else:
+                self.ans = resolved_output
+                return {"kind": "result", "value": resolved_output}
+        except (ZeroDivisionError, TypeError, ValueError, NameError, SyntaxError):
+            return None
+        except sp.SympifyError:
+            return None
+        except Exception:
+            # Fail closed - anything SymPy can't interpret cleanly is
+            # treated as "not a flexible-math utterance", letting the
+            # outer chatbot intent chain move on to other handlers.
+            return None
+
+
+def _format_flexible_result(payload) -> str:
+    """Drops the internal dict payload produced by
+    FlexibleScientificCalculator.calculate() down to a friendly chat
+    line. Kept outside the class so the calculator itself stays
+    presentation-free."""
+    if payload is None:
+        return ""
+    if payload["kind"] == "error":
+        return payload["value"]
+    if payload["kind"] == "assignment":
+        return f"{payload['name']} = {payload['value']} (I'll remember that.)"
+    return f"{payload['value']}"
+
+
+# ==============================================================================
 # SECTION 3C: TEXT CASE CONVERTER
 # ==============================================================================
 #
