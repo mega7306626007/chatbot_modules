@@ -7023,7 +7023,221 @@ GRATITUDE_PRACTICE_RESPONSES = {
     ],
 }
 
+# ==============================================================================
+# CONVERSATION-ARC banks (Section 8, emotion-support flow)
+# ------------------------------------------------------------------------------
+# Hand-written, tri-lingual banks powering the conversational continuity
+# arc: when a user shares a hard feeling ("i am sad" -> "why" -> "i was
+# left" -> "i'm sorry" -> "advice" -> "quote" -> "joke"), the bot drives
+# the exchange forward one natural step at a time instead of answering
+# with a flat random line. These banks feed the *_arc_* helpers in the
+# ChatBot class; every line is a real, natural sentence in all three
+# languages - no generation, matching the rest of Section 8.
+# ==============================================================================
 
+ARC_WHY_PROMPTS = {
+    "en": [
+        "Why's that? Want to put it into words?",
+        "What started it? Take your time.",
+        "What made you feel this way? I'm listening.",
+        "If you feel like talking about what's behind it, I'm here.",
+    ],
+    "sw": [
+        "Kwa nini hivyo? Unataka kuweka kwa maneno?",
+        "Ni nini kilichoanza? Chukua muda wako.",
+        "Ni nini kilikufanya uhisi hivi? Ninasikiliza.",
+        "Ikiwa unataka kuzungumza kuhusu kilichosababisha, niko hapa.",
+    ],
+    "fr": [
+        "Pourquoi donc ? Tu veux le mettre en mots ?",
+        "Qu'est-ce qui a commencé tout ça ? Prends ton temps.",
+        "Qu'est-ce qui t'a fait te sentir ainsi ? Je t'écoute.",
+        "Si tu veux parler de ce qui se cache derrière, je suis là.",
+    ],
+}
+
+ARC_VALIDATION_RESPONSES = {
+    "en": [
+        "Thanks for telling me that. That really isn't easy to sit with.",
+        "That sounds genuinely heavy, and it makes sense you feel the way you do.",
+        "I'm glad you shared that. You don't have to handle it all at once.",
+        "That's a lot to carry, and getting it out here is a good first step.",
+    ],
+    "sw": [
+        "Asante kunithibitishia hilo. Sio rahisi kubeba.",
+        "Hiyo inasikika kuwa nzito kweli, na ina maana unajisikia vile unavyojisikia.",
+        "Nafurahi umeshiriki hilo. Huhitaji kushughulikia yote kwa mara moja.",
+        "Hilo ni jambo nzito kubeba, na kulitoa hapa ni hatua nzuri ya kwanza.",
+    ],
+    "fr": [
+        "Merci de me l'avoir dit. Ce n'est vraiment pas facile à porter.",
+        "Ça semble vraiment lourd, et il est logique que tu te sentes comme ça.",
+        "Je suis content que tu l'aies partagé. Tu n'as pas à tout gérer d'un coup.",
+        "C'est beaucoup à porter, et le sortir ici est déjà un bon premier pas.",
+    ],
+}
+
+ARC_OFFER_RESPONSES = {
+    "en": [
+        "Want some advice, a quote that might help, or a little laugh to ease the mood?",
+        "Would advice help, or maybe a comforting quote - or a joke to lighten things?",
+        "I can think it through with you (advice), share a quote to hold onto, or tell a joke. What sounds best?",
+    ],
+    "sw": [
+        "Unataka ushauri, nukuu inayoweza kusaidia, au kicheko kidogo kupunguza hali?",
+        "Ushauri ungesaidia, au labda nukuu ya kufariji - au utani kupunguza mzigo?",
+        "Naweza kufikiria nawe (ushauri), kushiriki nukuu ya kushikilia, au kusema utani. Ni nini bora?",
+    ],
+    "fr": [
+        "Tu veux des conseils, une citation qui pourrait aider, ou un petit rire pour alléger l'ambiance ?",
+        "Des conseils t'aideraient, ou peut-être une citation réconfortante - ou une blague pour dédramatiser ?",
+        "Je peux y réfléchir avec toi (conseils), partager une citation à garder, ou raconter une blague. Qu'est-ce qui te tente ?",
+    ],
+}
+
+ARC_ADVICE_BRIDGE_RESPONSES = {
+    "en": [
+        "Okay - here's how I'd start thinking about it:",
+        "Let's unpack it a little. My take:",
+        "Honestly, here's what I'd consider:",
+    ],
+    "sw": [
+        "Sawa - hivi ndivyo ningeanza kufikiria:",
+        "Tufungue kidogo. Mtazamo wangu:",
+        "Kwa uwazi, hiki ndicho ningefikiria:",
+    ],
+    "fr": [
+        "Bon - voilà par où je commencerais à réfléchir :",
+        "Déballons un peu. Mon avis :",
+        "Honnêtement, voici ce que j'envisagerais :",
+    ],
+}
+
+ARC_QUOTE_INTRO_RESPONSES = {
+    "en": [
+        "Here's a quote that might sit well with you right now:",
+        "This one's for you - something to hold onto:",
+        "A line that fits days like this:",
+    ],
+    "sw": [
+        "Hii ni nukuu ambayo inaweza kukufaa sasa hivi:",
+        "Hii ni yako - kitu cha kushikilia:",
+        "Sentensi inayofaa siku kama hii:",
+    ],
+    "fr": [
+        "Voici une citation qui pourrait te faire du bien en ce moment :",
+        "Celle-ci est pour toi - quelque chose à garder :",
+        "Une phrase qui va bien aux jours comme ça :",
+    ],
+}
+
+ARC_JOKE_INTRO_RESPONSES = {
+    "en": [
+        "Okay, changing gears a little - here's a joke:",
+        "Alright, if you're up for a grin - here's one:",
+        "A small break from the heavy stuff. Here's a joke:",
+    ],
+    "sw": [
+        "Sawa, tubadilishe kidogo - huo ni utani:",
+        "Sawa, ukiwa tayari kwa tabasamu - huu hapa:",
+        "Pumziko kidogo kutoka mambo mazito. Huu ni utani:",
+    ],
+    "fr": [
+        "Bon, on change un peu d'air - voici une blague :",
+        "D'accord, si tu es prêt à sourire - en voici une :",
+        "Une petite pause loin du lourd. Voici une blague :",
+    ],
+}
+
+ARC_OFFER_JOKE_RESPONSES = {
+    "en": [
+        "If you're up for it, want a joke to lighten the mood?",
+        "Fancy a small laugh next? Or we can keep talking.",
+        "Want something lighter after that? I can do a quick joke.",
+    ],
+    "sw": [
+        "Ukiwa tayari, unataka utani kupunguza hali?",
+        "Unataka kicheko kidogo kisha? Au tuendelee kuongea.",
+        "Unataka kitu chepesi baada ya hapo? Naweza kusema utani haraka.",
+    ],
+    "fr": [
+        "Si tu es partant, tu veux une blague pour alléger l'ambiance ?",
+        "Tu veux un petit rire ensuite ? Ou on continue à parler.",
+        "Tu veux quelque chose de plus léger après ça ? Je peux faire une blague rapide.",
+    ],
+}
+
+ARC_OFFER_QUOTE_RESPONSES = {
+    "en": [
+        "If you'd like something to hold onto, want a quiet quote next?",
+        "After that, a calming quote might land well - your call.",
+        "We could follow that with something to keep in your pocket - a quote?",
+    ],
+    "sw": [
+        "Kama ungependa kitu cha kushikilia, unataka nukuu tulivu kisha?",
+        "Baada ya hapo, nukuu ya utulivu inaweza kufaa - uamuzi wako.",
+        "Tunaweza kufuata hilo na kitu cha kuweka mfukoni mwako - nukuu?",
+    ],
+    "fr": [
+        "Si tu veux quelque chose à garder, tu veux une citation posée ensuite ?",
+        "Après ça, une citation apaisante pourrait faire du bien - à toi de voir.",
+        "On pourrait enchaîner avec quelque chose à mettre de côté - une citation ?",
+    ],
+}
+
+ARC_CHECKIN_RESPONSES = {
+    "en": [
+        "How are you feeling now? I'm right here either way.",
+        "Did that help at all? We can stay here as long as you need.",
+        "I know it doesn't fix everything - but I hope it lifted things a little.",
+    ],
+    "sw": [
+        "Unajisikiaje sasa? Niko hapa hata hivyo.",
+        "Je, hilo limesaidia? Tunaweza kubaki hapa kwa muda wote unahitaji.",
+        "Najua halisaidishi kila kitu - lakini natumai limepunguza kidogo.",
+    ],
+    "fr": [
+        "Comment tu te sens maintenant ? Je suis là, quoi qu'il arrive.",
+        "Ça a aidé un peu ? On peut rester ici aussi longtemps que tu veux.",
+        "Je sais que ça ne règle pas tout - mais j'espère que ça a allégé un peu les choses.",
+    ],
+}
+
+ARC_REASSURE_RESPONSES = {
+    "en": [
+        "No need to apologize - getting it out is exactly why I'm here.",
+        "Don't worry about it. Venting helps - keep going if you want.",
+        "You don't owe me an apology. I'm glad you told me.",
+    ],
+    "sw": [
+        "Huna haja ya kuomba msamaha - kulitoa ndiyo hasa nilipo.",
+        "Usijali. Kutoa mawazo kunasaidia - endelea ukitaka.",
+        "Hunidaiwi msamaha. Nafurahi umeniambia.",
+    ],
+    "fr": [
+        "Pas besoin d'excuses - le sortir est exactement pour ça que je suis là.",
+        "Ne t'inquiète pas. Se confier aide - continue si tu veux.",
+        "Tu ne me dois pas d'excuses. Je suis content que tu me l'aies dit.",
+    ],
+}
+
+ARC_NO_RESPONSES = {
+    "en": [
+        "No problem. I'm here whenever you want to pick it back up.",
+        "Fair enough. Just say the word if you want advice, a quote, or a joke - or nothing at all.",
+        "Totally fine. We don't have to go anywhere you don't want to.",
+    ],
+    "sw": [
+        "Hakuna tatizo. Niko hapa ukitaka kurudia jambo hilo.",
+        "Sawa basi. Niambie tu ukitaka ushauri, nukuu, au utani - au usichague chochote.",
+        "Ni sawa kabisa. Sihitaji kwenda popote usilotaka.",
+    ],
+    "fr": [
+        "Pas de problème. Je suis là quand tu voudras reprendre.",
+        "Très bien. Dis-moi si tu veux des conseils, une citation ou une blague - ou rien du tout.",
+        "Aucun souci. On n'a pas à aller où tu ne veux pas.",
+    ],
+}
 
 
 # ==============================================================================

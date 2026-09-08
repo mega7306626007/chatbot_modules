@@ -17,10 +17,25 @@ class TopicContinuityTracker:
     def __init__(self, max_history: int = 20):
         self.max_history = max_history
         self._history = []  # list of (topic_label, timestamp)
+        # Light per-turn conversation memory: the last raw user message,
+        # its typo-corrected form, and the label that ended up resolving
+        # this turn. Kept alongside the rolling topic stack so follow-up
+        # logic ("why?", bare "advice", "yes"/"no" to a bot offer) can
+        # read the most recent context without threading it through every
+        # handler signature.
+        self.last_user_text = None
+        self.last_corrected_text = None
+        self.last_label = None
+
+    def remember_turn(self, raw, corrected, label):
+        self.last_user_text = raw
+        self.last_corrected_text = corrected
+        self.last_label = label
 
     def record(self, topic_label: str):
         if not topic_label:
             return
+        self.last_label = topic_label
         # Collapse immediate repeats (asking two jokes in a row
         # shouldn't count as "changing topic and changing back").
         if self._history and self._history[-1][0] == topic_label:
