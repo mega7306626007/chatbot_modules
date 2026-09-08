@@ -120,6 +120,11 @@ class ChatBot:
         "feelings_sad": "feeling down",
         "feelings_happy": "feeling good",
         "feelings_tired": "being tired",
+        "stress_overwhelm_topic": "stress",
+        "decision_making_topic": "the decision",
+        "curiosity_topic": "your curiosity",
+        "rumination_topic": "that thought",
+        "feeling_stuck_topic": "feeling stuck",
         # KeywordTopicMatcher topics - same human-name guarantee so the
         # continuity tracker never echoes back internal keys.
         "music_topic": "music",
@@ -194,6 +199,10 @@ class ChatBot:
         self.nn_intent = NeuralIntentClassifier(NN_TRAINING_FILE, db=self.db)
         self.sentiment_clf = SentimentClassifier(SENTIMENT_TRAINING_FILE, db=self.db)
         self.smart_suggestions = SmartSuggestionEngine()
+        # Resolved label -> response bank map for the smalltalk topic set
+        # (populated on first topic handling; used by multi-turn
+        # follow-up continuity to re-engage a prior topic's bank).
+        self.simple_topic_banks = {}
         # Optional, opt-in LLM hybrid fallback - disabled unless the
         # user has filled in chatbot_llm_config.json and set
         # 'enabled': true. See Section 6I for the full design and the
@@ -2196,14 +2205,117 @@ class ChatBot:
     # All phrasing comes from the tri-lingual ARC_* banks (Section 8);
     # the state here is deliberately a tiny dict, not a model.
 
-    # Topics that START an emotion-support arc when engaged.
-    EMOTION_ARC_TOPICS = frozenset({
-        "feelings_sad", "feelings_tired", "feelings_angry_topic",
-        "feelings_nervous_topic", "anxiety_topic", "feelings_lonely_topic",
-        "mental_health_checkin_topic", "disappointment_topic",
-        "missing_someone_topic", "grief_loss_topic", "fear_phobia_topic",
-        "encouragement_topic",
-    })
+    # Data-driven recipe table: which recognized topics unlock which
+    # guided conversation arc. Every arc runs through the SAME generic
+    # driver below (listen -> validate -> offer -> deliver -> wrap); the
+    # only thing that varies per family is phrasing (the ARC_* banks in
+    # Section 8) and the menu order. Adding a new arc family = add topic
+    # keys here + a recipe + its banks; no new state-machine code.
+    ARC_TOPIC_RECIPES = {
+        # --- emotional support (the original arc) ---
+        "feelings_sad": "emotion",
+        "feelings_tired": "emotion",
+        "feelings_angry_topic": "emotion",
+        "feelings_nervous_topic": "emotion",
+        "anxiety_topic": "emotion",
+        "feelings_lonely_topic": "emotion",
+        "mental_health_checkin_topic": "emotion",
+        "disappointment_topic": "emotion",
+        "missing_someone_topic": "emotion",
+        "grief_loss_topic": "emotion",
+        "fear_phobia_topic": "emotion",
+        "encouragement_topic": "emotion",
+        # --- stress / overwhelm ---
+        "stress_overwhelm_topic": "stress",
+        "feeling_stuck_topic": "stress",
+        # --- celebration / praise ---
+        "small_celebration_topic": "celebration",
+        "achievement_milestone_topic": "celebration",
+        "feelings_proud_topic": "celebration",
+        # --- decisions ---
+        "decision_making_topic": "decision",
+        # --- curiosity / explain ---
+        "curiosity_topic": "curiosity",
+        # --- worry loops / rumination ---
+        "rumination_topic": "rumination",
+    }
+
+    ARC_RECIPES = {
+        "emotion": {
+            "menu": ["advice", "quote", "joke"],
+            "prompt": None,  # falls back to ARC_WHY_PROMPTS
+            "validate": ARC_VALIDATION_RESPONSES,
+            "min_words": 3,
+            "reassure": True,
+        },
+        "stress": {
+            "menu": ["advice", "quote", "joke"],
+            "prompt": ARC_STRESS_PROMPTS,
+            "validate": ARC_STRESS_VALIDATION,
+            "min_words": 3,
+            "reassure": True,
+        },
+        "celebration": {
+            "menu": ["quote", "joke", "advice"],
+            "prompt": ARC_CELEBRATE_PROMPTS,
+            "validate": ARC_CELEBRATE_VALIDATION,
+            "min_words": 2,
+            "reassure": False,
+        },
+        "decision": {
+            "menu": ["advice", "quote"],
+            "prompt": ARC_DECISION_PROMPTS,
+            "validate": ARC_DECISION_VALIDATION,
+            "min_words": 3,
+            "reassure": False,
+        },
+        "curiosity": {
+            "menu": ["trivia", "riddle", "quote"],
+            "prompt": ARC_CURIOSITY_PROMPTS,
+            "validate": ARC_CURIOSITY_VALIDATION,
+            "min_words": 3,
+            "reassure": False,
+        },
+        "rumination": {
+            "menu": ["advice", "quote", "joke"],
+            "prompt": ARC_RUMINATION_PROMPTS,
+            "validate": ARC_RUMINATION_VALIDATION,
+            "min_words": 3,
+            "reassure": True,
+        },
+    }
+
+    # Per-family content kinds: intro line introducing the delivered
+    # content, and the "want the NEXT kind?" line offered after it.
+    ARC_KIND_INTROS = {
+        "advice": ARC_ADVICE_BRIDGE_RESPONSES,
+        "quote": ARC_QUOTE_INTRO_RESPONSES,
+        "joke": ARC_JOKE_INTRO_RESPONSES,
+        "riddle": ARC_RIDDLE_INTRO_RESPONSES,
+        "trivia": ARC_TRIVIA_INTRO_RESPONSES,
+        "story": ARC_STORY_INTRO_RESPONSES,
+    }
+    ARC_OFFER_NEXT = {
+        "advice": ARC_OFFER_ADVICE_RESPONSES,
+        "quote": ARC_OFFER_QUOTE_RESPONSES,
+        "joke": ARC_OFFER_JOKE_RESPONSES,
+        "riddle": ARC_OFFER_RIDDLE_RESPONSES,
+        "trivia": ARC_OFFER_TRIVIA_RESPONSES,
+        "story": ARC_OFFER_STORY_RESPONSES,
+    }
+    ARC_KIND_LABELS = {
+        "advice": {"en": "some advice", "sw": "ushauri", "fr": "un conseil"},
+        "quote": {"en": "a quote", "sw": "nukuu", "fr": "une citation"},
+        "joke": {"en": "a joke", "sw": "utani", "fr": "une blague"},
+        "riddle": {"en": "a riddle", "sw": "kitendawili", "fr": "une devinette"},
+        "trivia": {"en": "a trivia question", "sw": "swali la maarifa", "fr": "une question de quiz"},
+        "story": {"en": "a short story", "sw": "hadithi fupi", "fr": "une courte histoire"},
+    }
+
+    # Topics that START a guided conversation arc when engaged. Kept as
+    # a derived frozenset so existing callers (and tests) can still ask
+    # "is this an arc topic?" without knowing the recipe internals.
+    EMOTION_ARC_TOPICS = frozenset(ARC_TOPIC_RECIPES)
 
     def _arc_active(self):
         return getattr(self, "_arc", None) is not None
@@ -2211,31 +2323,47 @@ class ChatBot:
     def _arc_join(self, *pieces):
         return "\n\n".join([p for p in pieces if p])
 
+    def _arc_recipe(self):
+        """Resolves the currently active recipe by family id."""
+        family = (self._arc or {}).get("family")
+        return self.ARC_RECIPES.get(family) if family else None
+
     def _arc_engaged(self, topic, response, lang):
-        """Called when an emotion topic just resolved through the keyword
-        matcher. Starts the arc ('listen' stage) and, when the empathy
-        line doesn't already end with an open question, appends a
-        "why/what's going on" prompt so the next step is explicit. If the
-        user doubles down on the SAME feeling (e.g. 'i am sad' then 'i
+        """Called when an arc topic just resolved through the keyword
+        matcher. Starts the family's arc ('listen' stage) and, when the
+        bank line doesn't already end with an open question, appends the
+        family's "tell me more" prompt so the next step is explicit. If
+        the user doubles down on the SAME topic (e.g. 'i am sad' then 'i
         was left'), that's the reason itself - validate it and offer the
-        advice/quote/joke menu instead of restarting the arc."""
+        menu instead of restarting the arc."""
+        recipe_id = self.ARC_TOPIC_RECIPES.get(topic)
+        if not recipe_id:
+            return response
         if self._arc_active():
-            if self._arc.get("label") == topic:
+            if (self._arc.get("family") == recipe_id
+                    and self._arc.get("label") == topic):
                 return self._arc_validate_and_offer(lang)
             return response
-        self._arc = {"label": topic, "stage": "listen", "pending": []}
+        self._arc = {"family": recipe_id, "label": topic,
+                     "stage": "listen", "pending": []}
+        recipe = self.ARC_RECIPES[recipe_id]
+        prompt_bank = recipe.get("prompt") or ARC_WHY_PROMPTS
         if response.rstrip().endswith("?"):
             return response
-        prompt = self._pick_clean_response(ARC_WHY_PROMPTS, lang, "arc_why_prompts")
+        prompt = self._pick_clean_response(prompt_bank, lang, f"arc_{recipe_id}_prompt")
         return f"{response}\n\n{prompt}" if prompt else response
 
     def _arc_validate_and_offer(self, lang):
         """Moves a live arc from 'listen' to 'offer', queueing the
-        advice/quote/joke menu, and returns the validation + offer text."""
+        family's menu, and returns the validation + offer text."""
+        recipe = self._arc_recipe()
+        if recipe is None:
+            return None
         self._arc["stage"] = "offer"
-        self._arc["pending"] = ["advice", "quote", "joke"]
-        validation = self._pick_clean_response(ARC_VALIDATION_RESPONSES, lang, "arc_validation")
-        offer = self._pick_clean_response(ARC_OFFER_RESPONSES, lang, "arc_offer")
+        self._arc["pending"] = list(recipe["menu"])
+        family = self._arc["family"]
+        validation = self._pick_clean_response(recipe["validate"], lang, f"arc_{family}_validation")
+        offer = self._pick_clean_response(ARC_OFFER_RESPONSES, lang, f"arc_{family}_offer")
         return self._arc_join(validation, offer)
 
     def _arc_maybe_explanation(self, text, lang):
@@ -2245,61 +2373,99 @@ class ChatBot:
         on-topic fallback keeps its old behavior."""
         if not self._arc_active() or self._arc["stage"] != "listen":
             return None
+        recipe = self._arc_recipe() or {}
         words = re.findall(r"\w+", text or "")
-        if len(words) < 3:
+        if len(words) < recipe.get("min_words", 3):
             return None
         return self._arc_validate_and_offer(lang)
 
     def _arc_intro(self, kind, lang):
-        """Transition line that precedes arc content (advice/quote/joke)."""
-        bank = {
-            "quote": ARC_QUOTE_INTRO_RESPONSES,
-            "joke": ARC_JOKE_INTRO_RESPONSES,
-            "advice": ARC_ADVICE_BRIDGE_RESPONSES,
-        }.get(kind)
+        """Transition line that precedes arc content."""
+        bank = self.ARC_KIND_INTROS.get(kind)
         if not bank:
             return ""
         return self._pick_clean_response(bank, lang, f"arc_{kind}_intro")
 
     def _arc_after(self, kind, lang):
-        """The offer/check-in line that follows a delivered arc step."""
-        bank = {
-            "advice": ARC_OFFER_QUOTE_RESPONSES,
-            "quote": ARC_OFFER_JOKE_RESPONSES,
-            "joke": ARC_CHECKIN_RESPONSES,
-        }.get(kind)
-        if not bank:
-            return ""
-        return self._pick_clean_response(bank, lang, f"arc_after_{kind}")
+        """Compatibility shim for the offer/check-in line that follows a
+        delivered arc step - now derived from the family's next pending
+        menu kind (see _arc_next_line)."""
+        return self._arc_next_line(kind, lang)
 
-    def _arc_advance(self, kind, settled):
-        """Moves the arc forward after 'kind' (advice/quote/joke) was
-        delivered. `settled=False` (the joke) ends the arc after its
-        check-in; the other steps queue the natural next offer."""
+    def _arc_next_line(self, kind, lang):
+        """Line after 'kind' was delivered: offers the NEXT pending menu
+        kind, or the closing check-in once the menu is exhausted."""
+        if not self._arc_active():
+            return self._pick_clean_response(ARC_CHECKIN_RESPONSES, lang, "arc_checkin")
+        pending = self._arc.get("pending") or []
+        nxt = pending[0] if pending else None
+        bank = self.ARC_OFFER_NEXT.get(nxt or "")
+        if not bank:
+            return self._pick_clean_response(ARC_CHECKIN_RESPONSES, lang, "arc_checkin")
+        return self._pick_clean_response(bank, lang, f"arc_offer_next_{nxt}")
+
+    def _arc_exit_kinds(self):
+        """Kinds whose delivery finishes the family's arc."""
+        recipe = self._arc_recipe() or {}
+        menu = recipe.get("menu") or []
+        return {menu[-1]} if menu else set()
+
+    def _arc_content(self, kind, lang):
+        """Produces the content for a menu kind that the user just asked
+        for directly through the arc's single-item yes path."""
+        if kind == "quote":
+            return self.fun.random_quote()
+        if kind == "joke":
+            return self.fun.random_joke(lang)
+        if kind == "advice":
+            return self._pick_clean_response(
+                ADVICE_REQUEST_RESPONSES, lang, "advice_request_topic")
+        if kind == "riddle":
+            return (f"{self.fun.random_riddle()}\n\n"
+                    "Try to answer it, or say 'reveal the riddle answer' if you're stuck.")
+        if kind == "trivia":
+            return f"{self.fun.random_trivia(lang)}\n\n(Answer with the letter or the full answer.)"
+        if kind == "story":
+            result = self.storyteller.random_story(user_name=self.user_name(), lang=lang)
+            if result is None:
+                return None
+            title, body = result
+            return f"📖 {title}\n\n{body}"
+        return None
+
+    def _kind_label(self, kind, lang):
+        """Localized menu label for a content kind, for the which-one prompt."""
+        labels = self.ARC_KIND_LABELS.get(kind) or {}
+        return labels.get(lang) or labels.get("en") or kind
+
+    def _arc_advance(self, kind, settled=None):
+        """Moves the arc forward after 'kind' was delivered. The family's
+        menu decides what comes next; delivering the menu's closing kind
+        ends the arc. `settled` can force the arc to end early."""
         if not self._arc_active():
             return
-        if kind == "quote":
-            self._arc["stage"] = "quote_done"
-            self._arc["pending"] = ["joke"] if settled else []
-        elif kind == "joke":
-            self._arc["stage"] = "joke_done"
-            self._arc["pending"] = []
-            if not settled:
-                self._arc = None
-        elif kind == "advice":
-            self._arc["stage"] = "advice_done"
-            self._arc["pending"] = ["quote", "joke"] if settled else []
+        recipe = self._arc_recipe() or {}
+        menu = recipe.get("menu") or []
+        if kind in menu:
+            idx = menu.index(kind)
+            nxt = menu[idx + 1:]
+        else:
+            nxt = []
+        if settled is False or kind not in menu or not nxt:
+            self._arc = None
+        else:
+            self._arc["pending"] = list(nxt)
+            self._arc["stage"] = "offer"
 
     def _arc_maybe_wrap(self, kind, content, lang):
-        """Wraps requested content (quote/joke/advice) with the arc's
-        transition lines when an arc is active. Without an active arc
-        this returns the content unchanged, so normal requests are never
-        affected."""
+        """Wraps requested content with the arc's transition lines when
+        an arc is active. Without an active arc this returns the content
+        unchanged, so normal requests are never affected."""
         if not self._arc_active():
             return content
         intro = self._arc_intro(kind, lang)
-        post = self._arc_after(kind, lang)
-        self._arc_advance(kind, settled=(kind != "joke"))
+        self._arc_advance(kind, settled=(kind not in self._arc_exit_kinds()))
+        post = self._arc_next_line(kind, lang)
         return self._arc_join(intro, content, post)
 
     def _arc_handle_offer_yes_no(self, message_is_yes, lang):
@@ -2310,43 +2476,41 @@ class ChatBot:
         if message_is_yes:
             if len(pending) == 1:
                 kind = pending[0]
-                if kind == "quote":
-                    content = self.fun.random_quote()
-                elif kind == "joke":
-                    content = self.fun.random_joke(lang)
-                elif kind == "advice":
-                    content = self._pick_clean_response(
-                        ADVICE_REQUEST_RESPONSES, lang, "advice_request_topic")
-                else:
-                    return None
+                content = self._arc_content(kind, lang)
+                if content is None:
+                    return self._arc_validate_and_offer(lang)
                 return self._arc_maybe_wrap(kind, content, lang)
             if len(pending) > 1:
-                return ("Sure - which would help most: some advice, a comforting "
-                        "quote, or a joke while we're at it?")
+                labels = ", ".join(self._kind_label(k, lang) for k in pending)
+                tpl = self._pick_clean_response(ARC_WHICH_OFFER_RESPONSES, lang, "arc_which_offer")
+                return tpl.format(kinds=labels)
             return None
         no_line = self._pick_clean_response(ARC_NO_RESPONSES, lang, "arc_no")
         return no_line
 
     def _handle_convo_arc(self, text, m):
         """Bare one-word follow-ups ('why?', 'yes', 'no', 'sorry') are
-        only resolved contextually while an emotion arc is live. Returns
-        None when no arc is active so the rest of the pipeline handles
-        the message unchanged (e.g. 'sorry' still reaches the apology
+        only resolved contextually while an arc is live. Returns None
+        when no arc is active so the rest of the pipeline handles the
+        message unchanged (e.g. 'sorry' still reaches the apology
         keyword topic)."""
         if not self._arc_active():
             return None
         lang = self.language_detector.detect(text or "x")
         lowered = (text or "").strip().lower().rstrip("!.? ")
+        recipe = self._arc_recipe() or {}
+        prompt_bank = recipe.get("prompt") or ARC_WHY_PROMPTS
         if re.search(r"^(?:please\s+)?(?:and\s+|but\s+)?(?:why|why so|why is that|"
                      r"why's that|how come|why do you think|why do i)\b", lowered):
             if self._arc["stage"] == "listen":
-                return self._pick_clean_response(ARC_WHY_PROMPTS, lang, "arc_why_prompts")
+                return self._pick_clean_response(prompt_bank, lang, "arc_prompt")
             return None
         if re.search(r"^(?:yes|yeah|yep|yup|sure|okay|ok|k|go ahead|please do)$", lowered):
             return self._arc_handle_offer_yes_no(True, lang)
         if re.search(r"^(?:no|nope|nah|not now|no thanks|no thank you)$", lowered):
             return self._arc_handle_offer_yes_no(False, lang)
-        if lowered in ("sorry", "i'm sorry", "im sorry", "my bad", "my mistake", "apologies"):
+        if recipe.get("reassure") and lowered in ("sorry", "i'm sorry", "im sorry",
+                                                  "my bad", "my mistake", "apologies"):
             return self._pick_clean_response(ARC_REASSURE_RESPONSES, lang, "arc_reassure")
         return None
 
@@ -4249,15 +4413,37 @@ class ChatBot:
                 self._mark_topic_resolved(self.active_topic)
                 return continuation
 
+        # Multi-turn continuity: an otherwise-unrouted message that CLEARLY
+        # points back at the conversation ("and then?", "tell me more",
+        # a short reply referencing 'it'/'that') re-engages the topic we
+        # were just on - picking another line from its bank and re-setting
+        # it as the active topic, instead of treating the nudge as noise.
+        if self.active_topic is None or self.active_topic_bank is None:
+            follow = self.topic_tracker.resolve_follow_up(user_text)
+            if follow and follow in self.simple_topic_banks:
+                bank = self.simple_topic_banks[follow]
+                self._mark_topic_resolved(follow, engage=True)
+                self.active_topic_bank = bank
+                line = self._pick_clean_response(bank, self.language_detector.detect(user_text), follow)
+                if line:
+                    return self._arc_engaged(follow, line, self.language_detector.detect(user_text))
+
         # Last resort before a flat "I don't understand": when there's a
         # recent topic on the table, acknowledge it so even an unmatchable
         # message keeps the conversation feeling continuous rather than
         # bouncing back to a wall of "I didn't get that".
         recent_chat = self.topic_tracker.current_topic()
         if recent_chat:
-            return (f"I didn't quite catch that. We were just talking about "
-                    f"{self._human_topic(recent_chat)} - want to go back to "
-                    f"it, or try something else?")
+            recent_two = self.topic_tracker.recent_labels(2)
+            if len(recent_two) > 1 and recent_two[1] != recent_two[0]:
+                back = (f"We were just talking about {self._human_topic(recent_two[0])} "
+                        f"and {self._human_topic(recent_two[1])} - want to pick one of "
+                        f"those back up, or try something new?")
+            else:
+                back = (f"I didn't quite catch that. We were just talking about "
+                        f"{self._human_topic(recent_chat)} - want to go back to "
+                        f"it, or try something else?")
+            return back
 
         return self._pick_toned_response(UNKNOWN_RESPONSES, "UNKNOWN_RESPONSES", lang)
 
@@ -4351,6 +4537,10 @@ class ChatBot:
             "politeness_please_topic": POLITENESS_PLEASE_RESPONSES,
             "exercise_fitness_topic": EXERCISE_FITNESS_RESPONSES,
             "mental_health_checkin_topic": MENTAL_HEALTH_CHECKIN_RESPONSES,
+            "stress_overwhelm_topic": MENTAL_HEALTH_CHECKIN_RESPONSES,
+            "rumination_topic": ANXIETY_RESPONSES,
+            "curiosity_topic": ARC_CURIOSITY_ACK_RESPONSES,
+            "decision_making_topic": FEELING_STUCK_RESPONSES,
             "gratitude_for_bot_topic": GRATITUDE_FOR_BOT_RESPONSES,
             "repeat_clarify_topic": REPEAT_CLARIFY_RESPONSES,
             "small_celebration_topic": SMALL_CELEBRATION_RESPONSES,
@@ -4511,6 +4701,7 @@ class ChatBot:
             "hope_future_topic": HOPE_FUTURE_RESPONSES,
             "gratitude_practice_topic": GRATITUDE_PRACTICE_RESPONSES,
         }
+        self.simple_topic_banks = simple_topic_banks
         if topic in simple_topic_banks:
             bank = simple_topic_banks[topic]
             if topic == "farewell_topic":
@@ -4542,18 +4733,19 @@ class ChatBot:
         if topic == "riddle":
             self._mark_topic_resolved(topic)
             riddle = self.fun.random_riddle()
-            return f"{riddle}\n\n(Try to answer it, or say 'reveal the riddle answer' if you're stuck.)"
+            content = f"{riddle}\n\n(Try to answer it, or say 'reveal the riddle answer' if you're stuck.)"
+            return self._arc_maybe_wrap("riddle", content, lang)
         if topic == "trivia":
             self._mark_topic_resolved(topic)
-            trivia = self.fun.random_trivia(lang)
-            return f"{trivia}\n\n(Answer with the letter or the full answer.)"
+            content = f"{self.fun.random_trivia(lang)}\n\n(Answer with the letter or the full answer.)"
+            return self._arc_maybe_wrap("trivia", content, lang)
         if topic == "story":
             self._mark_topic_resolved(topic)
             result = self.storyteller.random_story(user_name=self.user_name(), lang=lang)
             if result is None:
                 return None
             title, body = result
-            return f"📖 {title}\n\n{body}"
+            return self._arc_maybe_wrap("story", f"📖 {title}\n\n{body}", lang)
         if topic == "poem":
             self._mark_topic_resolved(topic)
             poem = self.poet.rhyming_couplets(theme="general", lang=lang)

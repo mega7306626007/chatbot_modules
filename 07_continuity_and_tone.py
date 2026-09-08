@@ -26,11 +26,66 @@ class TopicContinuityTracker:
         self.last_user_text = None
         self.last_corrected_text = None
         self.last_label = None
+        # Rolling short-term conversation turn memory (most recent first)
+        # for multi-turn continuity: the last few raw/corrected/label
+        # triples, so follow-up logic can look back more than one turn.
+        # Capped at 4 turns - this is contextual glue, not a topic log
+        # (that's `_history`).
+        self.turn_history = []
+
+    # Follow-up cues that mean "keep talking about whatever we were just
+    # talking about" even though the message itself carries no topic.
+    FOLLOW_UP_CUES = re.compile(
+        r"^(and(?: then)?|what about it|tell me more|say more|go on|continue|"
+        r"what happened next|what else|i see(?: you)?|really|interesting|"
+        r"makes sense|that makes sense|how so|why is that|you said|is that so|"
+        r"no way|oh really|meanwhile|also|so what now|hmm[, ]?$|right[,]?$)",
+        re.IGNORECASE,
+    )
+    # Words that, in a SHORT otherwise-unrouted message, read as
+    # referring back to the last thing the bot said.
+    BACK_REFERENCE_PRONOUNS = ("it", "that", "this", "them", "they", "its",
+                               "so", "really", "one")
 
     def remember_turn(self, raw, corrected, label):
         self.last_user_text = raw
         self.last_corrected_text = corrected
         self.last_label = label
+        self.turn_history.insert(0, {
+            "raw": raw, "corrected": corrected, "label": label})
+        if len(self.turn_history) > 4:
+            self.turn_history.pop()
+
+    def recent_labels(self, limit: int = 3) -> list:
+        """Most-recent non-None labels, newest first, de-duplicated."""
+        seen = set()
+        out = []
+        for lbl in [self.last_label] + [t["label"] for t in self.turn_history]:
+            if lbl and lbl not in seen:
+                seen.add(lbl)
+                out.append(lbl)
+            if len(out) >= limit:
+                break
+        return out
+
+    def resolve_follow_up(self, text):
+        """If an unrouted message is clearly a continuation cue or a
+        short back-reference, return the label of the topic we were last
+        on, so the core can re-engage that topic's bank. Returns None
+        when the message reads as genuinely new - callers then fall
+        through to their normal unrouted handling."""
+        labels = self.recent_labels(2)
+        if not labels:
+            return None
+        text_l = (text or "").strip().lower()
+        if not text_l:
+            return None
+        if self.FOLLOW_UP_CUES.match(text_l):
+            return labels[0]
+        words = re.findall(r"[a-z']+", text_l)
+        if 1 <= len(words) <= 8 and any(w in self.BACK_REFERENCE_PRONOUNS for w in words):
+            return labels[0]
+        return None
 
     def record(self, topic_label: str):
         if not topic_label:

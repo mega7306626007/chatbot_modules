@@ -7239,5 +7239,344 @@ ARC_NO_RESPONSES = {
     ],
 }
 
+# --- ARC recipe banks: stress/overwhelm --------------------------------
+ARC_STRESS_PROMPTS = {
+    "en": [
+        "What's been piling up on you lately?",
+        "What's the biggest weight on your shoulders right now?",
+        "If you put today's stress into one sentence, what would it be?",
+    ],
+    "sw": [
+        "Ni nini kimekulemea siku hizi?",
+        "Uzito mkubwa ni upi kwako hivi sasa?",
+        "Ukiweka msongo wa leo katika sentensi moja, ingekuwaje?",
+    ],
+    "fr": [
+        "Qu'est-ce qui s'accumule sur toi en ce moment ?",
+        "Qu'est-ce qui pèse le plus lourd sur tes épaules aujourd'hui ?",
+        "Si tu résumais ton stress d'aujourd'hui en une phrase, ce serait quoi ?",
+    ],
+}
+
+ARC_STRESS_VALIDATION = {
+    "en": [
+        "That does sound like a lot to carry.",
+        "No wonder you feel stretched thin - that's genuinely heavy.",
+        "It makes sense that you're stressed; that's a real weight.",
+    ],
+    "sw": [
+        "Hilo ni jambo kubwa kweli la kubeba.",
+        "Haishangazi unahisi mzigo - kweli ni nzito.",
+        "Inaeleweka ukiwa na msongo - huo ni uzito wa kweli.",
+    ],
+    "fr": [
+        "C'est beaucoup à porter, vraiment.",
+        "Pas étonnant que tu sois épuisé - c'est vraiment lourd.",
+        "Ça se comprend que tu sois stressé ; c'est un vrai poids.",
+    ],
+}
+
+# --- ARC recipe banks: celebration/praise ------------------------------
+ARC_CELEBRATE_PROMPTS = {
+    "en": [
+        "What made it happen?",
+        "What's the story behind this win?",
+        "What were you aiming for when you started?",
+    ],
+    "sw": [
+        "Kilichosababisha ni nini?",
+        "Hadithi ya mafanikio haya ni ipi?",
+        "Ulikuwa ukilenga nini ulipoanza?",
+    ],
+    "fr": [
+        "Comment ça s'est produit ?",
+        "Quelle est l'histoire derrière cette réussite ?",
+        "Quel était ton objectif au départ ?",
+    ],
+}
+
+ARC_CELEBRATE_VALIDATION = {
+    "en": [
+        "That's genuinely exciting - congratulations!",
+        "I'm really happy for you; that took real effort.",
+        "Great work - you clearly earned that one.",
+    ],
+    "sw": [
+        "Hilo linasisimua kweli - pongezi!",
+        "Ninafurahi kwako; hilo lilichukua juhudi halisi.",
+        "Kazi nzuri - ulistahili hilo kabisa.",
+    ],
+    "fr": [
+        "C'est vraiment une belle nouvelle - félicitations !",
+        "Je suis content pour toi ; ça a demandé un vrai effort.",
+        "Beau travail - tu l'as clairement mérité.",
+    ],
+}
+
+# --- ARC recipe banks: decisions ---------------------------------------
+ARC_DECISION_PROMPTS = {
+    "en": [
+        "What are the options in front of you?",
+        "What matters most to you in this choice?",
+        "What feels like the sticking point?",
+    ],
+    "sw": [
+        "Chaguzi zilizo mbele yako ni zipi?",
+        "Ni nini kinachokujalisha zaidi katika uamuzi huu?",
+        "Ni nini kinakukwamisha hapa?",
+    ],
+    "fr": [
+        "Quelles sont les options qui s'offrent à toi ?",
+        "Qu'est-ce qui compte le plus dans ce choix pour toi ?",
+        "Qu'est-ce qui te bloque exactement ?",
+    ],
+}
+
+ARC_DECISION_VALIDATION = {
+    "en": [
+        "That's a genuine trade-off - no easy pick there.",
+        "Both sides make real sense, which is why it's hard.",
+        "I can see why you're weighing this carefully.",
+    ],
+    "sw": [
+        "Huo ni mgawanyiko wa kweli - hakuna rahisi hapa.",
+        "Pande zote zinaeleweka, ndiyo maana ni vigumu.",
+        "Naona kwa nini unazingatia hili vizuri.",
+    ],
+    "fr": [
+        "C'est un vrai dilemme - pas de choix facile ici.",
+        "Les deux options se défendent, c'est pour ça que c'est dur.",
+        "Je vois pourquoi tu pèses bien ce choix.",
+    ],
+}
+
+# --- ARC recipe banks: curiosity ---------------------------------------
+ARC_CURIOSITY_PROMPTS = {
+    "en": [
+        "What's the question you're wondering about?",
+        "What's been nagging at your curiosity lately?",
+        "What would you love to understand better?",
+    ],
+    "sw": [
+        "Swali unalojitakia ni lipi?",
+        "Ni nini kimekuamsha hamu ya kujua hivi karibuni?",
+        "Ungependa kuelewa nini vizuri zaidi?",
+    ],
+    "fr": [
+        "Quelle est la question qui t'intrigue ?",
+        "Qu'est-ce qui titille ta curiosité en ce moment ?",
+        "Qu'aimerais-tu mieux comprendre ?",
+    ],
+}
+
+ARC_CURIOSITY_VALIDATION = {
+    "en": [
+        "That's a great thing to wonder about.",
+        "Good question - those are fun to dig into.",
+        "Curiosity like that is how great ideas start.",
+    ],
+    "sw": [
+        "Hilo ni jambo zuri la kujiuliza.",
+        "Swali zuri - ni raha kuchimba humo.",
+        "Udadisi kama huu ndio mwanzo wa mawazo makubwa.",
+    ],
+    "fr": [
+        "C'est une belle question à se poser.",
+        "Bonne question - c'est amusant à creuser.",
+        "La curiosité comme ça, c'est comme ça que naissent les grandes idées.",
+    ],
+}
+
+# --- ARC recipe banks: rumination/worry loop ---------------------------
+ARC_RUMINATION_PROMPTS = {
+    "en": [
+        "What's the thought that keeps looping?",
+        "What keeps pulling your mind back in?",
+        "What's the worry that won't settle?",
+    ],
+    "sw": [
+        "Ni wazo lipi linalojirudia?",
+        "Ni nini kinachorudisha mawazo yako?",
+        "Ni hofu ipi isiyotulia?",
+    ],
+    "fr": [
+        "Quelle est la pensée qui tourne en boucle ?",
+        "Qu'est-ce qui ne cesse d'occuper ton esprit ?",
+        "Quelle est l'inquiétude qui ne se calme pas ?",
+    ],
+}
+
+ARC_RUMINATION_VALIDATION = {
+    "en": [
+        "That kind of looping is exhausting - I hear you.",
+        "A thought that won't settle is a heavy roommate.",
+        "It's tiring when your mind keeps replaying the same thing.",
+    ],
+    "sw": [
+        "Kujirudia huko kunachosha - nakusikia.",
+        "Wazo lisilotulia ni mzigo mkubwa.",
+        "Inachosha akili ikirudiarudia jambo moja.",
+    ],
+    "fr": [
+        "Ce genre de boucle est épuisant - je t'entends.",
+        "Une pensée qui ne se pose pas est un vrai colocataire lourd.",
+        "C'est fatigant quand l'esprit rejoue sans cesse la même chose.",
+    ],
+}
+
+# --- ARC generic "want the next kind?" offerers ------------------------
+ARC_OFFER_ADVICE_RESPONSES = {
+    "en": [
+        "Want me to lay out some advice on that?",
+        "Could I offer a bit of practical advice?",
+        "Would some advice help lighten the load?",
+    ],
+    "sw": [
+        "Unataka niandae ushauri kuhusu hilo?",
+        "Naweza kutoa ushauri wa vitendo?",
+        "Je, ushauri ungepunguza mzigo?",
+    ],
+    "fr": [
+        "Tu veux que je te propose des conseils là-dessus ?",
+        "Je peux te donner un conseil concret ?",
+        "Des conseils t'aideraient à alléger ?",
+    ],
+}
+
+ARC_OFFER_RIDDLE_RESPONSES = {
+    "en": [
+        "Fancy a riddle to stretch your brain?",
+        "How about a riddle on top of that?",
+        "Want a riddle to switch things up?",
+    ],
+    "sw": [
+        "Unapenda kitendawili kuichangamsha akili?",
+        "Vipi kitendawili zaidi?",
+        "Unataka kitendawili kubadilisha mambo?",
+    ],
+    "fr": [
+        "Une devinette pour te dérouiller l'esprit ?",
+        "Et si on ajoutait une devinette ?",
+        "Tu veux une devinette pour changer un peu ?",
+    ],
+}
+
+ARC_OFFER_TRIVIA_RESPONSES = {
+    "en": [
+        "Want a fun piece of trivia?",
+        "How about a quick trivia question?",
+        "Curious for a trivia nugget?",
+    ],
+    "sw": [
+        "Unataka swali la elimu-jumla?",
+        "Vipi swali la haraka la maarifa?",
+        "Una hamu ya swali dogo?",
+    ],
+    "fr": [
+        "Tu veux une question de culture sympa ?",
+        "Et si on faisait une petite question de quiz ?",
+        "Une anecdote de quiz pour la route ?",
+    ],
+}
+
+ARC_OFFER_STORY_RESPONSES = {
+    "en": [
+        "Fancy a short story to finish on?",
+        "Want to hear a quick story?",
+        "How about a story to round it off?",
+    ],
+    "sw": [
+        "Unataka hadithi fupi ya kumalizia?",
+        "Unataka kusikia hadithi ya haraka?",
+        "Vipi hadithi ya kuhitimishia?",
+    ],
+    "fr": [
+        "Une petite histoire pour finir ?",
+        "Tu veux entendre une courte histoire ?",
+        "Et si on terminait avec une histoire ?",
+    ],
+}
+
+# --- ARC generic intros for non-emotion menu kinds ---------------------
+ARC_RIDDLE_INTRO_RESPONSES = {
+    "en": [
+        "Here's one to chew on:",
+        "Try this one:",
+        "Alright, a good one:",
+    ],
+    "sw": [
+        "Hii ni ya kufikiria:",
+        "Jaribu hii:",
+        "Sawa, hii ni nzuri:",
+    ],
+    "fr": [
+        "En voici une à méditer :",
+        "Essaie celle-ci :",
+        "OK, une bonne :",
+    ],
+}
+
+ARC_TRIVIA_INTRO_RESPONSES = {
+    "en": [
+        "Quick one for you:",
+        "Test your knowledge:",
+        "Here's a fun one:",
+    ],
+    "sw": [
+        "Hii ni ya haraka:",
+        "Jaribu maarifa yako:",
+        "Hapa kuna swali la kufurahisha:",
+    ],
+    "fr": [
+        "Une petite pour toi :",
+        "Teste tes connaissances :",
+        "Une petite question sympa :",
+    ],
+}
+
+ARC_STORY_INTRO_RESPONSES = {
+    "en": [
+        "Settle in - here's a short one:",
+        "Story time:",
+        "Once upon a moment:",
+    ],
+    "sw": [
+        "Rekea - hii ni fupi:",
+        "Wakati wa hadithi:",
+        "Ilikuwa mwanzo tu:",
+    ],
+    "fr": [
+        "Installe-toi - en voici une courte :",
+        "Heure du conte :",
+        "Il était un moment :",
+    ],
+}
+
+# --- ARC "which one?" menu prompt (kind labels inserted) ---------------
+ARC_WHICH_OFFER_RESPONSES = {
+    "en": ["Sure - which would help most right now? {kinds}"],
+    "sw": ["Sawa - ni ipi itakusaidia zaidi sasa? {kinds}"],
+    "fr": ["Bien sûr - laquelle t'aiderait le plus maintenant ? {kinds}"],
+}
+
+# --- Curiosity smalltalk fallback (pre-arc greeting) ------------------------
+ARC_CURIOSITY_ACK_RESPONSES = {
+    "en": [
+        "Curiosity is a good thing to have.",
+        "A curious mind never gets bored.",
+        "Wondering about things is how you learn the best stuff.",
+    ],
+    "sw": [
+        "Udadisi ni jambo zuri.",
+        "Akili yenye udadisi haichoki.",
+        "Kujiuliza ndio njia ya kujifunza mambo bora.",
+    ],
+    "fr": [
+        "La curiosité est une belle qualité.",
+        "Un esprit curieux ne s'ennuie jamais.",
+        "Se poser des questions, c'est comme ça qu'on apprend le mieux.",
+    ],
+}
+
 
 # ==============================================================================
