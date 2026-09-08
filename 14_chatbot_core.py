@@ -450,6 +450,17 @@ class ChatBot:
                                   r"\bdice roll\s+(\d*d\d+(?:\s*[+-]\s*\d+)?(?:\s+(?:dis)?adv(?:antage)?)?)\b"], self._handle_roll_dice)
         e.register("flip_coin", [r"\bflip a coin\b", r"\bcoin flip\b", r"\bheads or tails\b"], self._handle_flip_coin)
 
+        # Conversational follow-ups: "another one", "again", "one more",
+        # "give me another joke" - re-runs the most recent repeatable
+        # thing (joke/riddle/trivia/story/poem/quote/fun fact/coin/dice)
+        # instead of bouncing off the unknown-response catch-all. Registered
+        # EARLY (ahead of the broad fallback layers) but with fully-anchored,
+        # extra-content-proof patterns so it never hijacks a real message.
+        e.register("repeat_last_request", [
+            r"^\s*(?:please\s+)?(?:give me |i want |i wanna |let'?s (?:have|hear) |tell me |want |can you (?:please )?(?:tell|give) me )?(?:another one|one more|some more|more|again|once more|keep going|go on|continue|another)\s*(?:please)?[.!?]*\s*$",
+            r"^\s*(?:please\s+)?(?:give me |i want |i wanna |let'?s (?:have|hear) |tell me |want |can you (?:please )?(?:tell|give) me )?(?:one more|some more|more|once more|another)\s+(?:joke|riddle|trivia|trivia question|quote|story|poem|fun fact|fact|coin|coin flip|dice|dice roll)\s*(?:please)?[.!?]*\s*$",
+        ], self._handle_repeat_last)
+
         e.register("caesar_encode", [r"\bcaesar (?:cipher |encode )?(?:with shift\s*(-?\d+)\s*)?[:\s]+(.+)"],
                     self._handle_caesar_encode)
         e.register("rot13", [r"\brot13[:\s]+(.+)"], self._handle_rot13)
@@ -2081,6 +2092,78 @@ class ChatBot:
 
     def _handle_flip_coin(self, text, m):
         return self.dice_roller.flip_coin()
+
+    def _handle_repeat_last(self, text, m):
+        """'another one' / 'again' / 'one more' / 'give me another joke':
+        re-runs the most recent repeatable content (joke, riddle, trivia,
+        story, poem, quote, fun fact, coin flip, dice roll) instead of
+        falling through to the unknown-response bank. Explicit nouns
+        ('another joke') dispatch straight to that keyword-topic path;
+        bare follow-ups repeat whatever was last on the table (via the
+        continuity tracker). Returns None when there's nothing sensible
+        to repeat, letting the rest of the pipeline try."""
+        lowered = (text or "").lower()
+        lang = self.language_detector.detect(text or "x")
+
+        # Pattern 2 - an explicit noun was asked for: dispatch directly.
+        SPECIFIC = [
+            ("joke", "joke"),
+            ("riddle", "riddle"),
+            ("trivia", "trivia"),
+            ("trivia question", "trivia"),
+            ("quote", "quote"),
+            ("story", "story"),
+            ("poem", "poem"),
+            ("fun fact", "fun_fact_topic"),
+            ("fact", "fun_fact_topic"),
+            ("coin flip", "COIN"),
+            ("coin", "COIN"),
+            ("dice roll", "DICE"),
+            ("dice", "DICE"),
+        ]
+        for phrase, kw in SPECIFIC:
+            if phrase in lowered:
+                if kw == "COIN":
+                    self.engine.last_matched_intent = "flip_coin"
+                    return self._handle_flip_coin(text, m)
+                if kw == "DICE":
+                    self.engine.last_matched_intent = "roll_dice"
+                    return self.dice_roller.roll("1d20")
+                self.engine.last_matched_intent = phrase
+                return self._handle_keyword_topic(kw, lang, text)
+
+        # Pattern 1 - bare follow-up: repeat the last repeatable topic.
+        INTENT_TO_KEYWORD = {
+            "tell_joke": "joke", "joke": "joke",
+            "tell_quote": "quote", "quote": "quote",
+            "tell_riddle": "riddle", "riddle": "riddle",
+            "tell_trivia": "trivia", "trivia": "trivia",
+            "tell_story": "story", "story": "story",
+            "write_poem_general": "poem", "write_haiku": "poem",
+            "write_acrostic": "poem", "poem": "poem",
+            "fun_fact_topic": "fun_fact_topic",
+            "flip_coin": "COIN",
+            "roll_dice": "DICE",
+            "hangman_start": "HANGMAN",
+        }
+        prev = self.topic_tracker.current_topic()
+        if prev in INTENT_TO_KEYWORD:
+            kw = INTENT_TO_KEYWORD[prev]
+            if kw == "COIN":
+                self.engine.last_matched_intent = "flip_coin"
+                return self._handle_flip_coin(text, m)
+            if kw == "DICE":
+                self.engine.last_matched_intent = "roll_dice"
+                return self.dice_roller.roll("1d20")
+            if kw == "HANGMAN":
+                if self.hangman.active:
+                    return self.hangman.render()
+                return "No active game - say 'let's play hangman' to start one."
+            return self._handle_keyword_topic(kw, lang, text)
+        if prev:
+            return (f"We were just talking about {self._human_topic(prev)} - "
+                    f"want to go back to it, or ask for something new?")
+        return None
 
     def _raw_or_matched(self, pattern, group_index, fallback_match):
         """Re-extracts a payload group from the untouched raw user text
@@ -3969,7 +4052,17 @@ class ChatBot:
                 self._mark_topic_resolved(self.active_topic)
                 return continuation
 
-        return random.choice(UNKNOWN_RESPONSES[lang])
+        # Last resort before a flat "I don't understand": when there's a
+        # recent topic on the table, acknowledge it so even an unmatchable
+        # message keeps the conversation feeling continuous rather than
+        # bouncing back to a wall of "I didn't get that".
+        recent_chat = self.topic_tracker.current_topic()
+        if recent_chat:
+            return (f"I didn't quite catch that. We were just talking about "
+                    f"{self._human_topic(recent_chat)} - want to go back to "
+                    f"it, or try something else?")
+
+        return self._pick_toned_response(UNKNOWN_RESPONSES, "UNKNOWN_RESPONSES", lang)
 
     def _handle_keyword_topic(self, topic: str, lang: str, user_text: str):
         """

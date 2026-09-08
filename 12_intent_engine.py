@@ -105,11 +105,13 @@ class FlexiblePhraseNormalizer:
 
     # --- Leading filler prefixes (never trigger words themselves) ---
     FILLER_RE = re.compile(
-        r"^\s*(?:please\s+)?(?:can you|could you|would you|will you)"
+        r"^\s*(?:please\s+)?(?:can you|could you|would you|will you|do you think you can)"
         r"(?:\s+please)?\s+"
         r"|^\s*please\s+"
-        r"|^\s*(?:okay|ok|so|um|hmm|hmm,|uh|right|alright),?\s+"
-        r"|^\s*(?:i want to|i'?d like to|i need to|i would like to)\s+",
+        r"|^\s*(?:okay|ok|ok then|so|um|hmm|hmm,|uh|uhh|umm|right|alright),?\s+"
+        r"|^\s*(?:well,\s+|look,\s+)"
+        r"|^\s*(?:hey(?: there)?,\s+|yo,?\s+|aight,?\s+)"
+        r"|^\s*(?:i want (?:you )?to|i'?d like (?:you )?to|i need you to|i would like (?:you )?to)\s+",
         re.IGNORECASE,
     )
 
@@ -163,6 +165,15 @@ class FlexiblePhraseNormalizer:
         (r"\bshare (?:a |an? )?quote\b", "tell me a quote"),
         (r"\bgive me some wisdom\b", "tell me a quote"),
         (r"\briddle me this\b", "tell me a riddle"),
+        (r"\btell me a funny joke\b", "tell me a joke"),
+        (r"\btell me (?:a|an)other joke\b", "tell me a joke"),
+        (r"\bgive me a joke\b", "tell me a joke"),
+        (r"\bgive me an? (?:inspirational|inspiring) quote\b", "tell me a quote"),
+        (r"\bgive me an? riddle\b", "tell me a riddle"),
+        (r"\bgive me (?:a |some )?fun facts?\b", "tell me a fun fact"),
+        (r"\bshare (?:a |an? )?fun fact\b", "tell me a fun fact"),
+        (r"\bpick my brain\b", "ask me a trivia question"),
+        (r"\bquiz me\b", "ask me a trivia question"),
         # images
         (r"\bgenerate (?:a |an? )?picture of\b", "generate image of"),
         (r"\bgenerate (?:a |an? )?photo of\b", "generate image of"),
@@ -170,6 +181,14 @@ class FlexiblePhraseNormalizer:
         (r"\bcreate (?:a |an? )?(?:picture|photo) of\b", "generate image of"),
         # weather
         (r"\bhow is the weather (in|at|for)\b(.+)", r"weather in\2"),
+        (r"\bhow('?s| is) the weather like (in|at|for)\b(.+)", r"weather in\3"),
+        (r"\bwhat('?s| is) the weather like (in|at|for)\b(.+)", r"weather in\3"),
+        (r"\bwhat'?s the weather (in|at|for)\b(.+)", r"weather in\2"),
+        (r"\bwhat is the weather in\b(.+)", r"weather in\1"),
+        (r"\bweather report for\b", "weather in"),
+        (r"\bis it (?:sunny|raining|hot|cold|windy|snowing|cloudy|foggy) (?:in|at)\b(.+)", r"weather in\1"),
+        (r"\ba hundred\b", "one hundred"),
+        (r"\ba thousand\b", "one thousand"),
         # casual time/date/name knowledge asks
         (r"\b(?:i want to know|i'?d like to know|can you tell me|could you tell me) (?:the )?time\b",
          "what time is it"),
@@ -216,6 +235,8 @@ class FlexiblePhraseNormalizer:
             elif w == "thousand":
                 total = (total + current) * 1000
                 current = 0
+            elif w in ("a", "an"):
+                current += 1
             else:
                 v = self._number_word_value(w)
                 if v is None:
@@ -234,12 +255,28 @@ class FlexiblePhraseNormalizer:
         n = len(words)
         while i < n:
             bare = words[i].strip(".,;:!?()").lower()
-            if bare in self._NUMBER_WORDS or bare == "point":
+            next_bare = ""
+            if i + 1 < n:
+                next_bare = words[i + 1].strip(".,;:!?()").lower()
+            starts_run = (
+                bare in self._NUMBER_WORDS
+                or bare == "point"
+                or (bare in ("a", "an") and next_bare in ("hundred", "thousand"))
+            )
+            if starts_run:
                 run = []
                 j = i
                 while j < n:
                     bj = words[j].strip(".,;:!?()").lower()
-                    if bj in self._NUMBER_WORDS or bj in ("point", "and"):
+                    follow = ""
+                    if j + 1 < n:
+                        follow = words[j + 1].strip(".,;:!?()").lower()
+                    in_run = (
+                        bj in self._NUMBER_WORDS
+                        or bj in ("point", "and")
+                        or (bj in ("a", "an") and follow in ("hundred", "thousand"))
+                    )
+                    if in_run:
                         run.append(words[j])
                         j += 1
                     else:
@@ -261,6 +298,24 @@ class FlexiblePhraseNormalizer:
             lowered = re.sub(pattern, symbol, lowered, flags=re.IGNORECASE)
         return lowered
 
+    def _rewrite_verb_operators(self, text: str) -> str:
+        """Turns verb-first math phrasings ('multiply 6 by 5',
+        'divide 20 by 4') into the operand-first form the math-symbol
+        pass understands. Only ever runs inside the math-signal gate."""
+        text = re.sub(
+            r"\bmultiply\s+(\S+)\s+by\s+(\S+)",
+            r"\1 multiplied by \2",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"\bdivide\s+(\S+)\s+by\s+(\S+)",
+            r"\1 divided by \2",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return text
+
     def _apply_phrase_swaps(self, text: str) -> str:
         lowered = text
         for pattern, replacement in self.PHRASE_SWAPS:
@@ -278,6 +333,7 @@ class FlexiblePhraseNormalizer:
         #    "6 * 4" before filler/other passes.
         if self._has_math_signal(text):
             text = self._convert_number_words(text)
+            text = self._rewrite_verb_operators(text)
             text = self._convert_math_words(text)
 
         # 2. Loose tool phrasings -> canonical triggers.
@@ -286,6 +342,10 @@ class FlexiblePhraseNormalizer:
         # 3. Leading conversational filler (after swaps, so canonical
         #    triggers like "give me a riddle" are never stripped).
         text = self.FILLER_RE.sub("", text, count=1).strip()
+
+        # 4. Trailing politeness ("tell me a joke please" -> "tell me a joke"),
+        #    so intent patterns with anchored ends still fire.
+        text = re.sub(r"\s+please\b[.!?]*\s*$", "", text, flags=re.IGNORECASE)
 
         return text
 
@@ -481,6 +541,22 @@ class TypoCorrector:
         "myslef": "myself", "myseld": "myself",
         # "help" itself, surprisingly often mistyped under stress
         "hlep": "help", "hepl": "help", "jelp": "help",
+        # No-apostrophe English contractions (fast casual typing): restore
+        # the apostrophe so intent patterns like r"i'?d like to" or the
+        # keyword matcher's possessive forms see the canonical spelling.
+        "dont": "don't", "cant": "can't", "wont": "won't",
+        "didnt": "didn't", "couldnt": "couldn't", "shouldnt": "shouldn't",
+        "wouldnt": "wouldn't", "isnt": "isn't", "arent": "aren't",
+        "wasnt": "wasn't", "werent": "weren't", "havent": "haven't",
+        "hasnt": "hasn't", "doesnt": "doesn't",
+        "im": "i'm", "ive": "i've", "youre": "you're",
+        "youve": "you've", "youd": "you'd", "theyre": "they're",
+        "theyve": "they've", "theyd": "they'd", "weve": "we've",
+        "whats": "what's", "thats": "that's", "theres": "there's",
+        # Casual collapsed phrases (informal but universally understood)
+        "wanna": "want to", "gonna": "going to", "gotta": "got to",
+        "gimme": "give me", "lemme": "let me", "kinda": "kind of",
+        "coz": "because", "dunno": "don't know",
         # generic doubled-letter slip examples are handled by the
         # edit-distance fallback below rather than hardcoded here.
     }
