@@ -3194,15 +3194,15 @@ class ChatBot:
     def _handle_greeting(self, text, m):
         lang = self.language_detector.detect(text)
         name = self.user_name()
+        if not name:
+            return self._pick_toned_response(GREETING_NAME_ASK, "GREETING_NAME_ASK", lang)
         base = self._pick_toned_response(GREETING_RESPONSES, "GREETING_RESPONSES", lang)
-        if name:
-            connector = {
-                "en": "It's good to chat with you again,",
-                "sw": "Nafurahi kuongea nawe tena,",
-                "fr": "C'est bon de te reparler,",
-            }[lang]
-            return f"{base.rstrip('.')} {connector} {name}."
-        return base
+        connector = {
+            "en": "It's good to chat with you again,",
+            "sw": "Nafurahi kuongea nawe tena,",
+            "fr": "C'est bon de te reparler,",
+        }[lang]
+        return f"{base.rstrip('.')} {connector} {name}."
 
     def _handle_farewell(self, text, m):
         lang = self.language_detector.detect(text)
@@ -4926,6 +4926,9 @@ class ChatBot:
             "gratitude_practice_topic": GRATITUDE_PRACTICE_RESPONSES,
         }
         self.simple_topic_banks = simple_topic_banks
+        if topic == "greeting_topic":
+            self._mark_topic_resolved(topic, engage=True)
+            return self._handle_greeting(user_text, None)
         if topic in simple_topic_banks:
             bank = simple_topic_banks[topic]
             if topic == "farewell_topic":

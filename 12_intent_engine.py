@@ -938,6 +938,7 @@ class LanguageDetector:
         "naitwa", "jina", "leo", "kesho", "jana", "saa", "tarehe",
         "ninataka", "napenda", "ninapenda", "unataka", "unapenda",
         "habari yako", "freshi", "poa", "sawa", "karibu", "kwaheri",
+        "niaje", "sasa", "fiti", "buda", "msee", "aman",
         "lala", "salama", "nzuri", "mbaya", "vizuri", "hadithi", "shairi",
         "utani", "soma", "andika", "samahani", "pole", "haya", "sawa",
         "na", "ya", "wa", "la", "kwa", "ni", "si", "kama", "lakini",
@@ -1174,7 +1175,7 @@ class KeywordTopicMatcher:
         },
         "greeting_topic": {
             "en": ["hello", "hi there", "hey"],
-            "sw": ["habari", "jambo", "mambo"],
+            "sw": ["habari", "jambo", "mambo", "niaje", "sasa", "vipi", "fiti", "freshi"],
             "fr": ["bonjour", "salut", "bonsoir", "coucou"],
         },
         "how_are_you_topic": {

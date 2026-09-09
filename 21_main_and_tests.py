@@ -210,7 +210,7 @@ def run_self_test():
 
     test_inputs = [
         "hello",
-        "my name is Jordan",
+        "my name is Alex",
         "what's my name",
         "my favorite color is teal",
         "what's my favorite color",
@@ -228,7 +228,7 @@ def run_self_test():
         "tell me a fantasy story",
         "tell me a neural story",
         "write a haiku about the ocean",
-        "write an acrostic for Jordan",
+        "write an acrostic for Alex",
         "write a poem about love",
         "what is 12 * 4",
         "tell me a joke",

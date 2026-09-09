@@ -83,6 +83,29 @@ GREETING_RESPONSES = {
     ],
 }
 
+GREETING_NAME_ASK = {
+    "en": [
+        "Hey, how's it going? What's your name?",
+        "Hi there! Nice to meet you - what's your name?",
+        "Hey! Before we go further, what should I call you?",
+        "Hello! I'd love to know who I'm talking to - what's your name?",
+        "Hi! Good to see a fresh face - what's your name?",
+    ],
+    "sw": [
+        "Poa! Ningependa kujua jina yako.",
+        "Habari! Ningependa kujua jina lako.",
+        "Karibu! Ninataka kujua jina lako - jina lako ni nani?",
+        "Mambo! Kabla tuzidi, niambie jina lako.",
+        "Sasa! Nimefurahi kukutana nawe - jina lako ni nani?",
+    ],
+    "fr": [
+        "Salut, ça va ? Comment tu t'appelles ?",
+        "Bonjour ! Ravi de te rencontrer - comment tu t'appelles ?",
+        "Salut ! Avant d'aller plus loin, comment dois-je t'appeler ?",
+        "Coucou ! J'aimerais savoir à qui je parle - ton prénom ?",
+    ],
+}
+
 FAREWELL_RESPONSES = {
     "en": [
         "Goodbye! Take care.",
