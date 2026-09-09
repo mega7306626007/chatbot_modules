@@ -314,6 +314,10 @@ class ChatBot:
         # same topic never repeat the exact same line (the auto-template
         # pass left some banks with only a handful of clean entries).
         self._last_clean_reply = {}
+        # Rolling per-label history (deque-style list, capped at 3) of
+        # the lines most recently returned by _pick_clean_response, so
+        # repeated requests never echo the same text back-to-back.
+        self._recent_clean_replies = {}
         # Emotion-support conversation arc state: None when idle, else a
         # small dict {"label", "stage", "pending"} (see EMOTION_ARC_TOPICS
         # and the _arc_* helpers) that carries "i am sad" -> "why" ->
@@ -2311,11 +2315,40 @@ class ChatBot:
         "trivia": {"en": "a trivia question", "sw": "swali la maarifa", "fr": "une question de quiz"},
         "story": {"en": "a short story", "sw": "hadithi fupi", "fr": "une courte histoire"},
     }
+    # Localized lead-in line that precedes the personalized follow-up
+    # questions at the end of a structured advice guide.
+    ARC_ASK_INTROS = {
+        "en": "If you want, tell me:",
+        "sw": "Kama unataka, niambie:",
+        "fr": "Si tu veux, dis-moi :",
+    }
 
     # Topics that START a guided conversation arc when engaged. Kept as
     # a derived frozenset so existing callers (and tests) can still ask
     # "is this an arc topic?" without knowing the recipe internals.
     EMOTION_ARC_TOPICS = frozenset(ARC_TOPIC_RECIPES)
+
+    # Strong, situation-specific words that count as a "reason" even
+    # when the user's reply is very short ("devastated.", "drowning.",
+    # "won!!"). Lets the arc stay generous with single-token feelings
+    # without validating every stray one-word message.
+    ARC_STRONG_REASON_WORDS = {
+        "emotion": {"abandoned", "betrayed", "cheated", "dumped", "heartbroken",
+                    "devastated", "worthless", "useless", "unlovable", "alone",
+                    "fired", "laid", "failed", "failed", "cried", "crying",
+                    "scared", "terrified", "numb", "empty", "hopeless", "tears"},
+        "stress": {"drowning", "overwhelmed", "crushed", "exhausted", "snapped",
+                   "panicking", "drained", "swamped", "suffocating", "broken"},
+        "celebration": {"passed", "won", "accepted", "promoted", "graduated",
+                        "engaged", "pregnant", "published", "bought", "married",
+                        "adopted", "finished"},
+        "decision": {"stuck", "caught", "torn", "conflicted", "unsure",
+                     "wavering", "paralyzed", "hesitant"},
+        "curiosity": {"fascinating", "fascinated", "confusing", "confused",
+                      "puzzling", "weird", "intrigued", "amazed", "curious"},
+        "rumination": {"replaying", "looping", "spinning", "guilt", "regret",
+                       "shame", "haunting", "stuck"},
+    }
 
     def _arc_active(self):
         return getattr(self, "_arc", None) is not None
@@ -2335,17 +2368,29 @@ class ChatBot:
         family's "tell me more" prompt so the next step is explicit. If
         the user doubles down on the SAME topic (e.g. 'i am sad' then 'i
         was left'), that's the reason itself - validate it and offer the
-        menu instead of restarting the arc."""
+        menu instead of restarting the arc. A message that moves the
+        conversation to a DIFFERENT arc family switches the arc cleanly
+        rather than refusing to let go of the old one."""
         recipe_id = self.ARC_TOPIC_RECIPES.get(topic)
         if not recipe_id:
             return response
         if self._arc_active():
-            if (self._arc.get("family") == recipe_id
-                    and self._arc.get("label") == topic):
+            if self._arc.get("family") != recipe_id:
+                # Genuine topic change: start the new arc fresh.
+                self._arc = {"family": recipe_id, "label": topic,
+                             "stage": "listen", "pending": []}
+            elif self._arc.get("label") == topic:
                 return self._arc_validate_and_offer(lang)
-            return response
-        self._arc = {"family": recipe_id, "label": topic,
-                     "stage": "listen", "pending": []}
+            else:
+                # Same family, different facet (sad + anxious): treat the
+                # new statement as the reason while still listening.
+                self._arc["label"] = topic
+                if self._arc["stage"] == "listen":
+                    return self._arc_validate_and_offer(lang)
+                return response
+        else:
+            self._arc = {"family": recipe_id, "label": topic,
+                         "stage": "listen", "pending": []}
         recipe = self.ARC_RECIPES[recipe_id]
         prompt_bank = recipe.get("prompt") or ARC_WHY_PROMPTS
         if response.rstrip().endswith("?"):
@@ -2369,14 +2414,24 @@ class ChatBot:
     def _arc_maybe_explanation(self, text, lang):
         """At the 'listen' stage, an unmatched multi-word message is
         treated as the user's reason: validate it and open the offer
-        menu. Returns None when the arc isn't ready for this, so the
-        on-topic fallback keeps its old behavior."""
+        menu. Short messages are ALSO accepted when they carry a strong
+        emotion/reason word - 'devastated', 'drowning', 'won', etc.
+        Returns None when the arc isn't ready for this, so the on-topic
+        fallback keeps its old behavior."""
         if not self._arc_active() or self._arc["stage"] != "listen":
             return None
         recipe = self._arc_recipe() or {}
         words = re.findall(r"\w+", text or "")
-        if len(words) < recipe.get("min_words", 3):
-            return None
+        min_words = recipe.get("min_words", 3)
+        if len(words) < min_words:
+            family = self._arc["family"]
+            strong = self.ARC_STRONG_REASON_WORDS.get(family, ())
+            if not any(w in strong for w in (w.lower() for w in words)):
+                return None
+        # The user just named their reason - hold onto it so a later
+        # advice request can render a situation-specific structured
+        # guide instead of a generic one-liner.
+        self._arc["reason"] = text
         return self._arc_validate_and_offer(lang)
 
     def _arc_intro(self, kind, lang):
@@ -2418,6 +2473,12 @@ class ChatBot:
         if kind == "joke":
             return self.fun.random_joke(lang)
         if kind == "advice":
+            # Render the situation-specific long-form guide. Falls back
+            # to a bank one-liner only if no guide exists.
+            structured = self._structured_advice(
+                self._arc.get("reason"), self._arc.get("label"), lang)
+            if structured:
+                return structured
             return self._pick_clean_response(
                 ADVICE_REQUEST_RESPONSES, lang, "advice_request_topic")
         if kind == "riddle":
@@ -2463,6 +2524,9 @@ class ChatBot:
         unchanged, so normal requests are never affected."""
         if not self._arc_active():
             return content
+        # Remember what was just delivered so a follow-up answer to a
+        # structured-advice guide's questions can continue it.
+        self._arc["last_kind"] = kind
         intro = self._arc_intro(kind, lang)
         self._arc_advance(kind, settled=(kind not in self._arc_exit_kinds()))
         post = self._arc_next_line(kind, lang)
@@ -2489,11 +2553,11 @@ class ChatBot:
         return no_line
 
     def _handle_convo_arc(self, text, m):
-        """Bare one-word follow-ups ('why?', 'yes', 'no', 'sorry') are
-        only resolved contextually while an arc is live. Returns None
-        when no arc is active so the rest of the pipeline handles the
-        message unchanged (e.g. 'sorry' still reaches the apology
-        keyword topic)."""
+        """Bare one-word follow-ups ('why?', 'yes', 'no', 'sorry',
+        'alright', 'please', a direct kind word) are resolved
+        contextually while an arc is live. Returns None when no arc is
+        active so the rest of the pipeline handles the message unchanged
+        (e.g. 'sorry' still reaches the apology keyword topic)."""
         if not self._arc_active():
             return None
         lang = self.language_detector.detect(text or "x")
@@ -2505,14 +2569,146 @@ class ChatBot:
             if self._arc["stage"] == "listen":
                 return self._pick_clean_response(prompt_bank, lang, "arc_prompt")
             return None
-        if re.search(r"^(?:yes|yeah|yep|yup|sure|okay|ok|k|go ahead|please do)$", lowered):
+        yes = re.search(
+            r"^(?:yes|yeah|yep|yup|y|sure|sure thing|okay|ok|k|kk|alright|"
+            r"go ahead|please do|yes please|please|do it|let's do it|lets do it|"
+            r"why not|hit me|sounds good|gimme|fine|deal|uh huh|mhm|yeah sure|"
+            r"okay sure|you bet|absolutely|let's hear it|sure why not)$", lowered)
+        no = re.search(
+            r"^(?:no|nope|nah|not now|no thanks|no thank you|never mind|"
+            r"maybe later|not really|not yet)$", lowered)
+        done = re.search(
+            r"^(?:that's enough|thats enough|i'm done|im done|i am done|stop there|"
+            r"stop|nothing else|skip|pass|enough|leave it|never mind then|"
+            r"let's stop|lets stop|i'm good|im good)$", lowered)
+        if yes:
             return self._arc_handle_offer_yes_no(True, lang)
-        if re.search(r"^(?:no|nope|nah|not now|no thanks|no thank you)$", lowered):
+        if done:
+            # A definitive "that's it" ends the arc gracefully rather
+            # than leaving a stale menu hanging.
+            self._arc = None
+            return self._pick_clean_response(ARC_CHECKIN_RESPONSES, lang, "arc_checkin")
+        if no:
             return self._arc_handle_offer_yes_no(False, lang)
+        # Direct kind-word pick while a menu is open: "a quote", "nukuu",
+        # "une blague", "joke please" deliver that specific item.
+        if self._arc["stage"] == "offer" and self._arc.get("pending"):
+            kind = self._match_kind_word(lowered)
+            if kind and kind in self._arc["pending"]:
+                content = self._arc_content(kind, lang)
+                if content:
+                    return self._arc_maybe_wrap(kind, content, lang)
         if recipe.get("reassure") and lowered in ("sorry", "i'm sorry", "im sorry",
-                                                  "my bad", "my mistake", "apologies"):
+                                                  "my bad", "my mistake", "apologies",
+                                                  "so sorry", "i apologize"):
             return self._pick_clean_response(ARC_REASSURE_RESPONSES, lang, "arc_reassure")
         return None
+
+    def _match_kind_word(self, lowered):
+        """Maps a mention of a content kind word (any of the three
+        languages) to the canonical kind name. Uses word boundaries so
+        'fact' doesn't fire inside 'factory'."""
+        for kind, words in {
+            "advice": ("advice", "advise", "suggestion", "suggestions", "tips",
+                       "a tip", "ushauri", "conseil", "des conseils"),
+            "quote": ("quote", "quotes", "saying", "inspirational",
+                      "nukuu", "citation", "citations"),
+            "joke": ("joke", "jokes", "funny", "make me laugh", "make us laugh",
+                     "utani", "blague", "une blague"),
+            "riddle": ("riddle", "riddles", "brain teaser",
+                       "kitendawili", "devinette"),
+            "trivia": ("trivia", "quiz", "fun fact", "a fun fact",
+                       "swali la maarifa", "question de quiz"),
+            "story": ("story", "stories", "tale", "hadithi", "histoire"),
+            "poem": ("poem", "poems", "shairi", "poème"),
+        }.items():
+            if re.search(r"\b(?:%s)\b" % "|".join(map(re.escape, words)), lowered):
+                return kind
+        return None
+
+    def _match_guide(self, reason, lang, topic=None):
+        """Picks the structured advice guide for a user's reason. Within
+        the DETECTED language, the LONGEST keyword contained in the reason
+        wins (so 'i was left' beats the short 'sad' key). Falls back to
+        the arc topic's declared guides, then to the generic 'general'
+        guide so advice requests always have rich content."""
+        text = (reason or "").lower()
+        lang_keys = (ARC_ADVICE_GUIDES or {}).items()
+        best = None
+        best_len = -1
+        for name, guide in lang_keys:
+            for key in guide.get("keys", {}).get(lang, ()):
+                key = key.lower()
+                if key and key in text and len(key) > best_len:
+                    best = guide
+                    best_len = len(key)
+        if best is not None:
+            return best
+        if topic:
+            for guide in ARC_ADVICE_GUIDES.values():
+                if topic in guide.get("topics", ()):
+                    return guide
+        return ARC_ADVICE_GUIDES.get("general")
+
+    def _structured_advice(self, reason, topic, lang):
+        """Renders a long-form, sectioned advice guide for the user's
+        reason/topic in the detected language - lead, numbered sections
+        with steps (and notes), personalized questions, and a close.
+        Falls back to the generic guide (or None) rather than repeating
+        the same one-liner the user has already seen."""
+        guide = self._match_guide(reason, lang, topic)
+        if not guide:
+            return None
+        content = guide.get(lang) or guide.get("en") or {}
+        if not content:
+            return None
+        parts = []
+        if content.get("lead"):
+            parts.append(content["lead"])
+        for i, sec in enumerate(content.get("sections") or [], 1):
+            head = sec.get("head")
+            if head:
+                parts.append(f"{i}. {head}")
+            for step in sec.get("steps") or []:
+                parts.append(f"- {step}")
+            note = sec.get("note")
+            if note:
+                parts.append(f"  ({note})")
+        questions = content.get("questions") or []
+        if questions:
+            parts.append(self.ARC_ASK_INTROS.get(lang, self.ARC_ASK_INTROS["en"]))
+            for q in questions:
+                parts.append(f"- {q}")
+        if content.get("close"):
+            parts.append(content["close"])
+        return "\n".join(parts)
+
+    def _arc_advice_continuation(self, text, lang):
+        """After a structured advice guide was delivered, an otherwise-
+        unmatched short message is likely the user answering one of the
+        guide's follow-up questions - reply with the guide's 'followup'
+        line instead of bouncing to a random bank reply or unanswered
+        response. Returns None when the moment isn't right so the rest
+        of the pipeline runs unchanged."""
+        if not self._arc_active():
+            return None
+        if self._arc.get("last_kind") not in ("advice",):
+            return None
+        guide = self._match_guide(self._arc.get("reason"),
+                                  lang,
+                                  self._arc.get("label"))
+        if not guide:
+            return None
+        content = guide.get(lang) or guide.get("en") or {}
+        followup = content.get("followup")
+        if not followup:
+            return None
+        words = re.findall(r"\w+", text or "")
+        # Too long to be an answer to a question - let it route normally.
+        if len(words) > 18:
+            return None
+        self._arc = None
+        return followup
 
     def _raw_or_matched(self, pattern, group_index, fallback_match):
         """Re-extracts a payload group from the untouched raw user text
@@ -2998,15 +3194,15 @@ class ChatBot:
     def _handle_greeting(self, text, m):
         lang = self.language_detector.detect(text)
         name = self.user_name()
+        if not name:
+            return self._pick_toned_response(GREETING_NAME_ASK, "GREETING_NAME_ASK", lang)
         base = self._pick_toned_response(GREETING_RESPONSES, "GREETING_RESPONSES", lang)
-        if name:
-            connector = {
-                "en": "It's good to chat with you again,",
-                "sw": "Nafurahi kuongea nawe tena,",
-                "fr": "C'est bon de te reparler,",
-            }[lang]
-            return f"{base.rstrip('.')} {connector} {name}."
-        return base
+        connector = {
+            "en": "It's good to chat with you again,",
+            "sw": "Nafurahi kuongea nawe tena,",
+            "fr": "C'est bon de te reparler,",
+        }[lang]
+        return f"{base.rstrip('.')} {connector} {name}."
 
     def _handle_farewell(self, text, m):
         lang = self.language_detector.detect(text)
@@ -4076,21 +4272,23 @@ class ChatBot:
         """Samples from a trilingual response bank, preferring entries
         that don't carry the leaked-template phrasing - falling back to
         the whole bank if every entry looks templated, so this never
-        blocks a response. Also avoids repeating the exact line returned
-        for this topic on the previous turn."""
+        blocks a response. Also rotates so the same line is never
+        repeated within the last few turns for this topic."""
         entries = bank.get(lang) or bank.get("en") or []
         if not entries:
             return None
         clean = [entry for entry in entries if not self._is_leaky_template(entry, topic_label)]
         pool = clean or entries
-        chosen = random.choice(pool)
-        last = self._last_clean_reply.get(topic_label)
-        if chosen == last and len(pool) > 1:
-            for _ in range(4):
-                alt = random.choice(pool)
-                if alt != last:
-                    chosen = alt
-                    break
+        # Avoid everything returned recently for this label (last 3),
+        # not just the immediately-previous line. This is what keeps a
+        # conversation from going "advice -> same advice -> same advice".
+        seen = list(self._recent_clean_replies.get(topic_label, ()))
+        rest = [entry for entry in pool if entry not in seen]
+        chosen = random.choice(rest or pool)
+        seen.append(chosen)
+        if len(seen) > 3:
+            seen.pop(0)
+        self._recent_clean_replies[topic_label] = seen
         self._last_clean_reply[topic_label] = chosen
         return chosen
 
@@ -4263,6 +4461,19 @@ class ChatBot:
         response = self.engine.handle(corrected_text, self)
         if response is not None:
             return response
+
+        # Structured advice guides close with personalized questions; when
+        # one was just delivered, a short message that matched no handled
+        # intent is most plausibly the user answering those questions -
+        # reply with the guide's follow-up instead of letting the answer
+        # drift into a new topic or a random bank line.
+        if self._arc_active():
+            advise_followup = self._arc_advice_continuation(
+                user_text, self.language_detector.detect(user_text))
+        else:
+            advise_followup = None
+        if advise_followup is not None:
+            return advise_followup
 
         # Nothing matched the strict IntentEngine - try the more FLEXIBLE
         # keyword/topic matcher next. This recognizes topic keywords
@@ -4458,11 +4669,24 @@ class ChatBot:
         """
         # While an emotion-support arc is live, a request for advice is
         # part of the support flow rather than a fresh topic: it gets the
-        # arc's bridge line, then queues a closing quote/joke.
+        # situation-specific structured guide (or the arc's generic
+        # bridge line as a fallback), then queues a closing quote/joke.
         if topic == "advice_request_topic" and self._arc_active():
-            content = self._pick_clean_response(ADVICE_REQUEST_RESPONSES, lang, topic)
+            structured = self._structured_advice(
+                self._arc.get("reason"), self._arc.get("label"), lang)
+            content = structured or self._pick_clean_response(
+                ADVICE_REQUEST_RESPONSES, lang, topic)
             self._mark_topic_resolved(topic)
             return self._arc_maybe_wrap("advice", content, lang)
+
+        # Plain advice outside an arc now also gets the long-form guide
+        # when the message itself carries a recognizable situation (e.g.
+        # "i need advice about being dumped").
+        if topic == "advice_request_topic":
+            structured = self._structured_advice(user_text, None, lang)
+            if structured:
+                self._mark_topic_resolved(topic)
+                return structured
 
         # Simple smalltalk topics: just pick a random trilingual reply.
         simple_topic_banks = {
@@ -4702,6 +4926,9 @@ class ChatBot:
             "gratitude_practice_topic": GRATITUDE_PRACTICE_RESPONSES,
         }
         self.simple_topic_banks = simple_topic_banks
+        if topic == "greeting_topic":
+            self._mark_topic_resolved(topic, engage=True)
+            return self._handle_greeting(user_text, None)
         if topic in simple_topic_banks:
             bank = simple_topic_banks[topic]
             if topic == "farewell_topic":
@@ -4714,6 +4941,11 @@ class ChatBot:
             self._mark_topic_resolved(topic, engage=True)
             self.active_topic_bank = bank
             if topic in self.EMOTION_ARC_TOPICS:
+                # The current message re-expresses the feeling (e.g. "i
+                # was left" after "i am sad"), so it doubles as the reason
+                # the later advice guide should be built around.
+                if self._arc_active():
+                    self._arc["reason"] = user_text
                 return self._arc_engaged(topic, response, lang)
             return response
 
