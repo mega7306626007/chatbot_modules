@@ -577,7 +577,13 @@ class Database:
                 raise RuntimeError("DATABASE_URL is set, but psycopg is not installed.")
             self._conn = _PostgresConnection(DATABASE_URL)
         else:
-            self._conn = sqlite3.connect(self.db_path)
+            # check_same_thread=False: the web server builds the ChatBot on
+            # a background thread at startup (so the first request is fast)
+            # but every /api/chat request runs on its own server thread.
+            # All Database access is serialized behind a single lock in the
+            # web server, so this connection is never used from two threads
+            # at once - cross-thread access alone is safe.
+            self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA foreign_keys = ON")
         self._init_schema()

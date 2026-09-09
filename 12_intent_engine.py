@@ -2,6 +2,8 @@
 Auto-split from the original single-file chatbot.py - see main.py for load order.
 """
 
+import re
+
 # SECTION 7: PATTERN / INTENT MATCHING ENGINE
 # ==============================================================================
 
