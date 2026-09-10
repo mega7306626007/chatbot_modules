@@ -98,7 +98,7 @@ button { cursor: pointer; }
 .send-button:hover { background: #174f3c; transform: translateY(-1px); }
 .composer-note { margin: 10px 0 0; color: #a1aaa5; text-align: center; font-size: 10px; }
 .scroll-nav { position: absolute; right: 16px; bottom: 92px; display: flex; flex-direction: column; gap: 8px; z-index: 3; }
-.scroll-btn { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; color: var(--green); background: white; box-shadow: var(--shadow); font-size: 12px; line-height: 1; display: grid; place-items: center; transition: .2s ease; opacity: .92; }
+.scroll-btn { padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--green); background: white; box-shadow: var(--shadow); font-size: 11px; font-weight: 700; line-height: 1; display: inline-flex; align-items: center; gap: 6px; justify-content: center; white-space: nowrap; transition: .2s ease; opacity: .92; }
 .scroll-btn:hover { background: var(--green); color: white; border-color: var(--green); transform: translateY(-1px); }
 .scroll-btn:active { transform: translateY(0); }
 @keyframes appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -122,5 +122,5 @@ button { cursor: pointer; }
   .composer-wrap { padding: 0 15px 18px; }
   .shortcut-hint { display: none; }
   .scroll-nav { right: 10px; bottom: 78px; }
-  .scroll-btn { width: 32px; height: 32px; font-size: 11px; }
+  .scroll-btn { padding: 7px 10px; font-size: 10px; }
 }
