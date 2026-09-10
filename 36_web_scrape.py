@@ -211,6 +211,8 @@ _CANONICAL_FACT_ALIASES = {
     "nairobi national park": "nairobi park", "hells gate": "hell's gate",
     "masai mara national reserve": "maasai mara",
     "university of nairobi": "university of nairobi",
+    "uon": "university of nairobi", "u.o.n": "university of nairobi",
+    "u o n": "university of nairobi",
     "jkuat": "jomo kenyatta university", "kenyatta university": "kenyatta university",
     "kicd": "kicd", "knec": "knec", "kra": "kra", "kdf": "kdf",
     "jkia": "jomo kenyatta international airport",
@@ -1156,7 +1158,7 @@ class WebReader:
         factbase. Returns {"title", "extract", "url", "source"} or
         {"error": str}. Also covers the county list, which is a major
         Kenya question ('list the counties of kenya')."""
-        topic = query.strip().lower()
+        topic = query.strip().strip(".").lower()
         if not topic:
             return {"error": "what should I look up?"}
         # "list of counties" special forms - only when the user asks for the

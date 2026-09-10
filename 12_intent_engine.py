@@ -787,6 +787,7 @@ class TypoCorrector:
             "nanyuki", "nyeri", "naivasha", "kisumu", "mombasa", "nairobi",
             "lamu", "malindi", "eldoret", "thika", "kericho", "kakamega",
             "kajiado", "narok", "samburu", "turkana", "baringo", "laikipia",
+            "uon", "jkuat", "jkuat", "knec", "kra", "kicd", "kdf", "jkia",
         }
 
         # Efficiency: _correct_word() used to loop over ALL of
