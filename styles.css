@@ -27,7 +27,7 @@ button { cursor: pointer; }
 .new-chat span { margin-right: 9px; color: var(--yellow); font-size: 19px; line-height: 0; vertical-align: -1px; }
 .nav-label { margin: 0 12px 13px; color: #719087; font: 500 10px 'DM Mono', monospace; letter-spacing: 1.2px; text-transform: uppercase; }
 .nav-list { display: grid; gap: 5px; }
-.nav-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 0; border-radius: 7px; color: #bdcbc4; background: transparent; text-align: left; font-size: 13px; }
+.nav-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 0; border-radius: 7px; color: #bdcbc4; background: transparent; text-align: left; font-size: 13px; text-decoration: none; }
 .nav-item:hover, .nav-item.active { color: white; background: rgba(255,255,255,.1); }
 .nav-icon { width: 18px; color: #82ae9c; text-align: center; font-size: 16px; }
 .nav-count { margin-left: auto; color: #8fb7a7; font: 11px 'DM Mono', monospace; }
@@ -73,8 +73,8 @@ button { cursor: pointer; }
 .welcome-block h2 { margin: 0; font-size: clamp(32px, 4vw, 49px); line-height: 1.08; letter-spacing: -2px; }
 .welcome-block h2 em { color: var(--green); font-family: Georgia, serif; font-weight: 400; }
 .welcome-copy { margin: 20px 0 0; color: var(--muted); font-size: 13px; }
-.suggestions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 58px; }
-.suggestion { min-height: 112px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--panel); text-align: left; transition: .2s ease; }
+.suggestions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 58px; }
+.suggestion { min-height: 112px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--panel); text-align: left; text-decoration: none; display: block; transition: .2s ease; }
 .suggestion:hover { border-color: #9ec4ac; box-shadow: var(--shadow); transform: translateY(-3px); }
 .suggestion-icon { display: block; margin-bottom: 13px; color: var(--coral); font-size: 18px; }
 .suggestion span:not(.suggestion-icon), .suggestion small { display: block; }
@@ -98,6 +98,9 @@ button { cursor: pointer; }
 .send-button:hover { background: #174f3c; transform: translateY(-1px); }
 .composer-note { margin: 10px 0 0; color: #a1aaa5; text-align: center; font-size: 10px; }
 @keyframes appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (max-width: 980px) and (min-width: 721px) {
+  .suggestions { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 720px) {
   .sidebar { position: fixed; z-index: 5; inset: 0 auto 0 0; width: min(276px, 86vw); transform: translateX(-100%); transition: transform .25s ease; box-shadow: 18px 0 40px rgba(0,0,0,.18); }
   .sidebar.open { transform: translateX(0); }
