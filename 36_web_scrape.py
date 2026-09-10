@@ -1020,6 +1020,546 @@ for _cname, (_code, _cap, _reg, _towns, _note, _gov) in _KENYA_COUNTY_PROFILES.i
 
 
 # ---------------------------------------------------------------------------
+# WORLD COUNTRY FACTBASE - offline Africa (all 55 AU members) plus the major
+# world countries, mirroring the Kenya factbase's "always correct, instant,
+# no network" guarantee. Data is as-of 2026; heads of state carry the year
+# they took office, so stale leaders are obvious, not silently wrong.
+# ---------------------------------------------------------------------------
+# tuple order: (name, region, capital, currency, langs, officer,
+#               independence, population, eac_member)
+_WORLD_COUNTRIES = {
+    # ---- Africa: all 55 AU members ------------------------------------
+    "algeria": ("Algeria", "North Africa", "Algiers", "Algerian dinar (DZD)",
+                "Arabic and Berber", "President Abdelmadjid Tebboune (since 2019)",
+                "independent from France in 1962", "about 47 million (2025)", False),
+    "angola": ("Angola", "Southern Africa", "Luanda", "Angolan kwanza (AOA)",
+               "Portuguese", "President João Lourenço (since 2017)",
+               "independent from Portugal in 1975", "about 37 million (2025)", False),
+    "benin": ("Benin", "West Africa", "Porto-Novo", "West African CFA franc (XOF)",
+              "French", "President Patrice Talon (since 2016)",
+              "independent from France in 1960", "about 14 million (2025)", False),
+    "botswana": ("Botswana", "Southern Africa", "Gaborone", "Botswana pula (BWP)",
+                 "English and Setswana", "President Duma Boko (since 2024)",
+                 "independent from Britain in 1966", "about 2.6 million (2025)", False),
+    "burkina faso": ("Burkina Faso", "West Africa", "Ouagadougou",
+                     "West African CFA franc (XOF)", "French",
+                     "President (transitional) Captain Ibrahim Traoré (since 2022)",
+                     "independent from France in 1960", "about 23 million (2025)", False),
+    "burundi": ("Burundi", "East Africa", "Gitega", "Burundian franc (BIF)",
+                "Kirundi, French and English",
+                "President Évariste Ndayishimiye (since 2020)",
+                "independent from Belgium in 1962", "about 13 million (2025)", True),
+    "cabo verde": ("Cabo Verde", "West Africa", "Praia", "Cabo Verdean escudo (CVE)",
+                   "Portuguese", "President José Maria Neves (since 2021)",
+                   "independent from Portugal in 1975", "about 0.6 million (2025)", False),
+    "cameroon": ("Cameroon", "Central Africa", "Yaoundé", "Central African CFA franc (XAF)",
+                 "French and English", "President Paul Biya (since 1982)",
+                 "independent from France in 1960", "about 29 million (2025)", False),
+    "central african republic": (
+        "Central African Republic", "Central Africa", "Bangui",
+        "Central African CFA franc (XAF)", "French and Sango",
+        "President Faustin-Archange Touadéra (since 2016)",
+        "independent from France in 1960", "about 5.5 million (2025)", False),
+    "chad": ("Chad", "Central Africa", "N'Djamena", "Central African CFA franc (XAF)",
+             "French and Arabic", "President Mahamat Idriss Déby (since 2021)",
+             "independent from France in 1960", "about 19 million (2025)", False),
+    "comoros": ("Comoros", "East Africa", "Moroni", "Comorian franc (KMF)",
+                "Comorian, Arabic and French",
+                "President Azali Assoumani (since 2016)",
+                "independent from France in 1975", "about 0.9 million (2025)", False),
+    "congo": ("Republic of the Congo", "Central Africa", "Brazzaville",
+              "Central African CFA franc (XAF)", "French",
+              "President Denis Sassou Nguesso (since 1997)",
+              "independent from France in 1960", "about 6 million (2025)", False),
+    "dr congo": ("DR Congo", "Central Africa", "Kinshasa", "Congolese franc (CDF)",
+                 "French", "President Félix Tshisekedi (since 2019)",
+                 "independent from Belgium in 1960", "about 105 million (2025)", True),
+    "côte d'ivoire": ("Côte d'Ivoire", "West Africa", "Yamoussoukro",
+                      "West African CFA franc (XOF)", "French",
+                      "President Alassane Ouattara (since 2010)",
+                      "independent from France in 1960", "about 29 million (2025)", False),
+    "djibouti": ("Djibouti", "East Africa", "Djibouti City", "Djiboutian franc (DJF)",
+                 "French and Arabic", "President Ismail Omar Guelleh (since 1999)",
+                 "independent from France in 1977", "about 1.2 million (2025)", False),
+    "egypt": ("Egypt", "North Africa", "Cairo", "Egyptian pound (EGP)",
+              "Arabic", "President Abdel Fattah el-Sisi (since 2014)",
+              "independent from Britain in 1922", "about 113 million (2025)", False),
+    "equatorial guinea": (
+        "Equatorial Guinea", "Central Africa", "Malabo",
+        "Central African CFA franc (XAF)", "Spanish, French and Portuguese",
+        "President Teodoro Obiang Nguema Mbasogo (since 1979)",
+        "independent from Spain in 1968", "about 1.7 million (2025)", False),
+    "eritrea": ("Eritrea", "East Africa", "Asmara", "Eritrean nakfa (ERN)",
+                "Tigrinya and Arabic", "President Isaias Afwerki (since 1993)",
+                "independent from Ethiopia in 1993", "about 3.5 million (2025)", False),
+    "eswatini": ("Eswatini", "Southern Africa", "Mbabane", "Swazi lilangeni (SZL)",
+                 "Swazi and English", "King Mswati III (since 1986)",
+                 "independent from Britain in 1968", "about 1.2 million (2025)", False),
+    "ethiopia": ("Ethiopia", "East Africa", "Addis Ababa", "Ethiopian birr (ETB)",
+                 "Amharic", "President Taye Atske Selassie (since 2024)",
+                 "never colonised, seat of the African Union",
+                 "about 128 million (2025)", False),
+    "gabon": ("Gabon", "Central Africa", "Libreville", "Central African CFA franc (XAF)",
+              "French", "President Brice Oligui Nguema (since 2023)",
+              "independent from France in 1960", "about 2.5 million (2025)", False),
+    "gambia": ("The Gambia", "West Africa", "Banjul", "Gambian dalasi (GMD)",
+               "English", "President Adama Barrow (since 2017)",
+               "independent from Britain in 1965", "about 2.7 million (2025)", False),
+    "ghana": ("Ghana", "West Africa", "Accra", "Ghanaian cedi (GHS)",
+              "English", "President John Mahama (since 2025)",
+              "independent from Britain in 1957 - the first sub-Saharan country to decolonise",
+              "about 34 million (2025)", False),
+    "guinea": ("Guinea", "West Africa", "Conakry", "Guinean franc (GNF)",
+               "French", "President (transitional) Mamadi Doumbouya (since 2021)",
+               "independent from France in 1958", "about 14 million (2025)", False),
+    "guinea-bissau": ("Guinea-Bissau", "West Africa", "Bissau",
+                      "West African CFA franc (XOF)", "Portuguese",
+                      "President Umaro Sissoco Embaló (since 2020)",
+                      "independent from Portugal in 1974", "about 2.2 million (2025)", False),
+    "kenya": ("Kenya", "East Africa", "Nairobi", "Kenyan shilling (KES)",
+              "English and Swahili", "President William Ruto (since 2022)",
+              "independent from Britain in 1963", "about 55 million (2025)", True),
+    "lesotho": ("Lesotho", "Southern Africa", "Maseru", "Lesotho loti (LSL)",
+                "Sesotho and English", "King Letsie III (since 1996)",
+                "independent from Britain in 1966", "about 2.3 million (2025)", False),
+    "liberia": ("Liberia", "West Africa", "Monrovia", "Liberian dollar (LRD)",
+                "English", "President Joseph Boakai (since 2024)",
+                "independent in 1847, Africa's oldest republic",
+                "about 5.6 million (2025)", False),
+    "libya": ("Libya", "North Africa", "Tripoli", "Libyan dinar (LYD)",
+              "Arabic", "Prime Minister Abdul Hamid Dbeibeh (since 2021)",
+              "independent from Italy in 1951", "about 7.4 million (2025)", False),
+    "madagascar": ("Madagascar", "East Africa", "Antananarivo", "Malagasy ariary (MGA)",
+                   "Malagasy and French", "President Andry Rajoelina (since 2019)",
+                   "independent from France in 1960", "about 30 million (2025)", False),
+    "malawi": ("Malawi", "Southern Africa", "Lilongwe", "Malawian kwacha (MWK)",
+               "English and Chichewa", "President Lazarus Chakwera (since 2020)",
+               "independent from Britain in 1964", "about 21 million (2025)", False),
+    "mali": ("Mali", "West Africa", "Bamako", "West African CFA franc (XOF)",
+             "French", "President (transitional) Assimi Goïta (since 2021)",
+             "independent from France in 1960", "about 23 million (2025)", False),
+    "mauritania": ("Mauritania", "West Africa", "Nouakchott",
+                   "Mauritanian ouguiya (MRU)", "Arabic",
+                   "President Mohamed Ould Ghazouani (since 2019)",
+                   "independent from France in 1960", "about 5 million (2025)", False),
+    "mauritius": ("Mauritius", "East Africa", "Port Louis", "Mauritian rupee (MUR)",
+                  "English and French", "President Dharam Gokhool (since 2024)",
+                  "independent from Britain in 1968", "about 1.3 million (2025)", False),
+    "morocco": ("Morocco", "North Africa", "Rabat", "Moroccan dirham (MAD)",
+                "Arabic and Berber", "King Mohammed VI (since 1999)",
+                "independent from France in 1956", "about 38 million (2025)", False),
+    "mozambique": ("Mozambique", "Southern Africa", "Maputo", "Mozambican metical (MZN)",
+                   "Portuguese", "President Daniel Chapo (since 2025)",
+                   "independent from Portugal in 1975", "about 34 million (2025)", False),
+    "namibia": ("Namibia", "Southern Africa", "Windhoek", "Namibian dollar (NAD)",
+                "English", "President Netumbo Nandi-Ndaitwah (since 2025)",
+                "independent from South Africa in 1990", "about 3 million (2025)", False),
+    "niger": ("Niger", "West Africa", "Niamey", "West African CFA franc (XOF)",
+              "French", "President (transitional) General Abdourahamane Tchiani (since 2023)",
+              "independent from France in 1960", "about 27 million (2025)", False),
+    "nigeria": ("Nigeria", "West Africa", "Abuja", "Nigerian naira (NGN)",
+                "English", "President Bola Tinubu (since 2023)",
+                "independent from Britain in 1960", "about 228 million (2025)", False),
+    "rwanda": ("Rwanda", "East Africa", "Kigali", "Rwandan franc (RWF)",
+               "Kinyarwanda, French and English", "President Paul Kagame (since 2000)",
+               "independent from Belgium in 1962", "about 14 million (2025)", True),
+    "são tomé and príncipe": (
+        "São Tomé and Príncipe", "Central Africa", "São Tomé",
+        "São Tomé and Príncipe dobra (STN)", "Portuguese",
+        "President Carlos Vila Nova (since 2021)",
+        "independent from Portugal in 1975", "about 0.2 million (2025)", False),
+    "senegal": ("Senegal", "West Africa", "Dakar", "West African CFA franc (XOF)",
+                "French", "President Bassirou Diomaye Faye (since 2024)",
+                "independent from France in 1960", "about 18 million (2025)", False),
+    "seychelles": ("Seychelles", "East Africa", "Victoria", "Seychellois rupee (SCR)",
+                   "Seychellois Creole, English and French",
+                   "President Wavel Ramkalawan (since 2020)",
+                   "independent from Britain in 1976", "about 0.1 million (2025)", False),
+    "sierra leone": ("Sierra Leone", "West Africa", "Freetown", "Sierra Leonean leone (SLE)",
+                     "English", "President Julius Maada Bio (since 2018)",
+                     "independent from Britain in 1961", "about 8.8 million (2025)", False),
+    "somalia": ("Somalia", "East Africa", "Mogadishu", "Somali shilling (SOS)",
+                "Somali and Arabic", "President Hassan Sheikh Mohamud (since 2022)",
+                "independent in 1960 (union of Somaliland and Italian Somaliland)",
+                "about 19 million (2025)", True),
+    "south africa": ("South Africa", "Southern Africa",
+                     "Pretoria (executive), Cape Town (legislative) and Bloemfontein (judicial)",
+                     "South African rand (ZAR)",
+                     "Eleven official languages led by Zulu, Xhosa, Afrikaans and English",
+                     "President Cyril Ramaphosa (since 2018)",
+                     "independent from Britain in 1910, a republic since 1961",
+                     "about 63 million (2025)", False),
+    "south sudan": ("South Sudan", "East Africa", "Juba", "South Sudanese pound (SSP)",
+                    "English", "President Salva Kiir (since 2011)",
+                    "independent from Sudan in 2011 - the world's newest country",
+                    "about 11 million (2025)", True),
+    "sudan": ("Sudan", "East Africa", "Khartoum", "Sudanese pound (SDG)",
+              "Arabic and English", "President (transitional) Abdel Fattah al-Burhan (since 2019)",
+              "independent from Britain and Egypt in 1956", "about 49 million (2025)", False),
+    "tanzania": ("Tanzania", "East Africa", "Dodoma (official capital; Dar es Salaam is the largest city)",
+                 "Tanzanian shilling (TZS)", "Swahili and English",
+                 "President Samia Suluhu Hassan (since 2021)",
+                 "independent from Britain in 1961 (Tanganyika), union with Zanzibar in 1964",
+                 "about 67 million (2025)", True),
+    "togo": ("Togo", "West Africa", "Lomé", "West African CFA franc (XOF)",
+             "French", "President Faure Gnassingbé (since 2005)",
+             "independent from France in 1960", "about 9.5 million (2025)", False),
+    "tunisia": ("Tunisia", "North Africa", "Tunis", "Tunisian dinar (TND)",
+                "Arabic", "President Kais Saied (since 2019)",
+                "independent from France in 1956", "about 12 million (2025)", False),
+    "uganda": ("Uganda", "East Africa", "Kampala", "Ugandan shilling (UGX)",
+               "English and Swahili", "President Yoweri Museveni (since 1986)",
+               "independent from Britain in 1962", "about 49 million (2025)", True),
+    "western sahara": ("Western Sahara", "North Africa", "Laâyoune (claimed) / Tifariti",
+                       "Sahrawi peseta", "Arabic and Spanish",
+                       "President of the Sahrawi Republic Brahim Ghali (since 2016)",
+                       "territory administered by Morocco, claimed by the Sahrawi Arab Democratic Republic",
+                       "about 0.6 million (2025)", False),
+    "zambia": ("Zambia", "Southern Africa", "Lusaka", "Zambian kwacha (ZMW)",
+               "English", "President Hakainde Hichilema (since 2021)",
+               "independent from Britain in 1964", "about 21 million (2025)", False),
+    "zimbabwe": ("Zimbabwe", "Southern Africa", "Harare", "Zimbabwean gold (ZiG)",
+                 "English, Shona and Ndebele", "President Emmerson Mnangagwa (since 2017)",
+                 "independent from Britain in 1980", "about 17 million (2025)", False),
+    # ---- Major world countries ----------------------------------------
+    "united states": ("United States", "North America", "Washington, D.C.",
+                      "US dollar (USD)", "English (de facto)",
+                      "President Donald Trump (since 2025)",
+                      "independent from Britain in 1776", "about 340 million (2025)", False),
+    "canada": ("Canada", "North America", "Ottawa", "Canadian dollar (CAD)",
+               "English and French", "Prime Minister Mark Carney (since 2025)",
+               "independent from Britain in 1867 (full sovereignty 1982)",
+               "about 41 million (2025)", False),
+    "mexico": ("Mexico", "North America", "Mexico City", "Mexican peso (MXN)",
+               "Spanish", "President Claudia Sheinbaum (since 2024)",
+               "independent from Spain in 1821", "about 130 million (2025)", False),
+    "brazil": ("Brazil", "South America", "Brasília", "Brazilian real (BRL)",
+               "Portuguese", "President Luiz Inácio Lula da Silva (since 2023)",
+               "independent from Portugal in 1822", "about 211 million (2025)", False),
+    "argentina": ("Argentina", "South America", "Buenos Aires", "Argentine peso (ARS)",
+                  "Spanish", "President Javier Milei (since 2023)",
+                  "independent from Spain in 1816", "about 47 million (2025)", False),
+    "united kingdom": ("United Kingdom", "Western Europe", "London",
+                       "Pound sterling (GBP)", "English",
+                       "Prime Minister Keir Starmer (since 2024); monarch King Charles III",
+                       "a union of four countries; the current union dates to 1801",
+                       "about 68 million (2025)", False),
+    "france": ("France", "Western Europe", "Paris", "Euro (EUR)", "French",
+               "President Emmanuel Macron (since 2017)",
+               "a republic since 1792 (modern constitution 1958)",
+               "about 66 million (2025)", False),
+    "germany": ("Germany", "Western Europe", "Berlin", "Euro (EUR)", "German",
+                "Chancellor Friedrich Merz (since 2025)",
+                "reunified in 1990", "about 84 million (2025)", False),
+    "italy": ("Italy", "Southern Europe", "Rome", "Euro (EUR)", "Italian",
+              "Prime Minister Giorgia Meloni (since 2022)",
+              "unified in 1861", "about 59 million (2025)", False),
+    "spain": ("Spain", "Southern Europe", "Madrid", "Euro (EUR)", "Spanish",
+              "Prime Minister Pedro Sánchez (since 2018)",
+              "a single kingdom since 1479 (modern constitution 1978)",
+              "about 48 million (2025)", False),
+    "portugal": ("Portugal", "Southern Europe", "Lisbon", "Euro (EUR)", "Portuguese",
+                 "Prime Minister Luís Montenegro (since 2024)",
+                 "independent since 1139 (modern Republic 1910)",
+                 "about 10 million (2025)", False),
+    "netherlands": ("Netherlands", "Western Europe", "Amsterdam",
+                    "Euro (EUR)", "Dutch", "Prime Minister Dick Schoof (since 2024)",
+                    "a constituent country of the Kingdom of the Netherlands",
+                    "about 18 million (2025)", False),
+    "belgium": ("Belgium", "Western Europe", "Brussels", "Euro (EUR)",
+                "Dutch, French and German", "Prime Minister Bart De Wever (since 2025)",
+                "independent from the Netherlands in 1830", "about 12 million (2025)", False),
+    "switzerland": ("Switzerland", "Western Europe", "Bern",
+                    "Swiss franc (CHF)", "German, French, Italian and Romansh",
+                    "Federal President Karin Keller-Sutter (2025)",
+                    "a confederation since 1291", "about 9 million (2025)", False),
+    "sweden": ("Sweden", "Northern Europe", "Stockholm", "Swedish krona (SEK)",
+               "Swedish", "Prime Minister Ulf Kristersson (since 2022)",
+               "united as a kingdom in the Middle Ages", "about 11 million (2025)", False),
+    "norway": ("Norway", "Northern Europe", "Oslo", "Norwegian krone (NOK)",
+               "Norwegian", "Prime Minister Jonas Gahr Støre (since 2021)",
+               "independent from Sweden in 1905", "about 5.6 million (2025)", False),
+    "denmark": ("Denmark", "Northern Europe", "Copenhagen", "Danish krone (DKK)",
+                "Danish", "Prime Minister Mette Frederiksen (since 2019)",
+                "a kingdom since the Viking Age", "about 6 million (2025)", False),
+    "finland": ("Finland", "Northern Europe", "Helsinki", "Euro (EUR)",
+                "Finnish and Swedish", "Prime Minister Petteri Orpo (since 2023)",
+                "independent from Russia in 1917", "about 5.6 million (2025)", False),
+    "ireland": ("Ireland", "Western Europe", "Dublin", "Euro (EUR)",
+                "Irish and English", "Taoiseach Micheál Martin (since 2025)",
+                "independent from Britain in 1922", "about 5.4 million (2025)", False),
+    "austria": ("Austria", "Western Europe", "Vienna", "Euro (EUR)", "German",
+                "Chancellor Alexander Schallenberg (since 2025)",
+                "a republic since 1918", "about 9 million (2025)", False),
+    "poland": ("Poland", "Central Europe", "Warsaw", "Polish złoty (PLN)", "Polish",
+               "Prime Minister Donald Tusk (since 2023)",
+               "independent in 1918 (restored)", "about 37 million (2025)", False),
+    "czech republic": ("Czech Republic", "Central Europe", "Prague", "Czech koruna (CZK)",
+                       "Czech", "Prime Minister Petr Fiala (since 2021)",
+                       "independent from Czechoslovakia in 1993",
+                       "about 11 million (2025)", False),
+    "greece": ("Greece", "Southern Europe", "Athens", "Euro (EUR)", "Greek",
+               "Prime Minister Kyriakos Mitsotakis (since 2019)",
+               "independent from the Ottoman Empire in 1830",
+               "about 10 million (2025)", False),
+    "russia": ("Russia", "Eastern Europe / North Asia", "Moscow", "Russian ruble (RUB)",
+               "Russian", "President Vladimir Putin (since 2012)",
+               "successor state of the USSR (1991)", "about 144 million (2025)", False),
+    "ukraine": ("Ukraine", "Eastern Europe", "Kyiv", "Ukrainian hryvnia (UAH)",
+                "Ukrainian", "President Volodymyr Zelenskyy (since 2019)",
+                "independent from the USSR in 1991", "about 33 million (2025)", False),
+    "china": ("China", "East Asia", "Beijing", "Chinese yuan (CNY)",
+              "Mandarin Chinese", "President Xi Jinping (since 2013)",
+              "a civilization for millennia; the People's Republic dates to 1949",
+              "about 1.4 billion (2025)", False),
+    "japan": ("Japan", "East Asia", "Tokyo", "Japanese yen (JPY)", "Japanese",
+              "Prime Minister Shigeru Ishiba (since 2024); emperor Naruhito",
+              "a monarchy with the world's oldest continuous imperial line",
+              "about 123 million (2025)", False),
+    "south korea": ("South Korea", "East Asia", "Seoul", "South Korean won (KRW)",
+                    "Korean", "Acting President Han Duck-soo (2025)",
+                    "a republic since 1948", "about 51 million (2025)", False),
+    "india": ("India", "South Asia", "New Delhi", "Indian rupee (INR)",
+              "Hindi and English", "Prime Minister Narendra Modi (since 2014)",
+              "independent from Britain in 1947", "about 1.4 billion (2025)", False),
+    "pakistan": ("Pakistan", "South Asia", "Islamabad", "Pakistani rupee (PKR)",
+                 "Urdu and English", "Prime Minister Shehbaz Sharif (since 2024)",
+                 "independent from Britain in 1947", "about 245 million (2025)", False),
+    "bangladesh": ("Bangladesh", "South Asia", "Dhaka", "Bangladeshi taka (BDT)",
+                   "Bengali", "Chief Adviser Muhammad Yunus (since 2024)",
+                   "independent from Pakistan in 1971", "about 173 million (2025)", False),
+    "indonesia": ("Indonesia", "Southeast Asia", "Jakarta", "Indonesian rupiah (IDR)",
+                  "Indonesian", "President Prabowo Subianto (since 2024)",
+                  "independent from the Netherlands in 1945 (recognised 1949)",
+                  "about 280 million (2025)", False),
+    "philippines": ("Philippines", "Southeast Asia", "Manila", "Philippine peso (PHP)",
+                    "Filipino and English", "President Ferdinand Marcos Jr. (since 2022)",
+                    "independent from the United States in 1946",
+                    "about 116 million (2025)", False),
+    "vietnam": ("Vietnam", "Southeast Asia", "Hanoi", "Vietnamese dong (VND)",
+                "Vietnamese", "President Lương Cường (since 2024)",
+                "independent in 1945 (modern reunified state 1976)",
+                "about 100 million (2025)", False),
+    "thailand": ("Thailand", "Southeast Asia", "Bangkok", "Thai baht (THB)",
+                 "Thai", "Prime Minister Paetongtarn Shinawatra (since 2024)",
+                 "the only Southeast Asian country never colonised by a European power",
+                 "about 72 million (2025)", False),
+    "singapore": ("Singapore", "Southeast Asia", "Singapore", "Singapore dollar (SGD)",
+                  "English, Malay, Mandarin and Tamil", "Prime Minister Lawrence Wong (since 2024)",
+                  "independent from Malaysia in 1965", "about 6 million (2025)", False),
+    "malaysia": ("Malaysia", "Southeast Asia", "Kuala Lumpur", "Malaysian ringgit (MYR)",
+                 "Malay", "Prime Minister Anwar Ibrahim (since 2022)",
+                 "independent from Britain in 1957", "about 35 million (2025)", False),
+    "turkey": ("Turkey", "Western Asia / Southeast Europe", "Ankara", "Turkish lira (TRY)",
+               "Turkish", "President Recep Tayyip Erdoğan (since 2014)",
+               "a republic since 1923", "about 86 million (2025)", False),
+    "saudi arabia": ("Saudi Arabia", "Western Asia", "Riyadh", "Saudi riyal (SAR)",
+                     "Arabic", "King Salman (since 2015)",
+                     "unified as the modern kingdom in 1932", "about 38 million (2025)", False),
+    "united arab emirates": ("United Arab Emirates", "Western Asia", "Abu Dhabi",
+                             "UAE dirham (AED)", "Arabic",
+                             "President Sheikh Mohamed bin Zayed (since 2022)",
+                             "founded in 1971 from seven emirates",
+                             "about 11 million (2025)", False),
+    "iran": ("Iran", "Western Asia", "Tehran", "Iranian rial (IRR)",
+             "Persian", "Supreme Leader Ali Khamenei (since 1989)",
+             "a state for millennia (Islamic Republic since 1979)",
+             "about 90 million (2025)", False),
+    "israel": ("Israel", "Western Asia", "Jerusalem", "Israeli new shekel (ILS)",
+               "Hebrew and Arabic", "Prime Minister Benjamin Netanyahu (since 2022)",
+               "a state since 1948", "about 10 million (2025)", False),
+    "australia": ("Australia", "Oceania", "Canberra", "Australian dollar (AUD)",
+                  "English", "Prime Minister Anthony Albanese (since 2022)",
+                  "federated in 1901 (full sovereignty 1986)",
+                  "about 27 million (2025)", False),
+    "new zealand": ("New Zealand", "Oceania", "Wellington", "New Zealand dollar (NZD)",
+                    "English and Māori", "Prime Minister Christopher Luxon (since 2023)",
+                    "a dominion from 1907 (full sovereignty 1947)",
+                    "about 5.3 million (2025)", False),
+}
+
+_WORLD_ALIASES = {
+    "ivory coast": "côte d'ivoire",
+    "usa": "united states",
+    "us": "united states",
+    "us of a": "united states",
+    "united states of america": "united states",
+    "america": "united states",
+    "uk": "united kingdom",
+    "great britain": "united kingdom",
+    "britain": "united kingdom",
+    "england": "united kingdom",
+    "uae": "united arab emirates",
+    "drc": "dr congo",
+    "dr c": "dr congo",
+    "d r congo": "dr congo",
+    "congo kinshasa": "dr congo",
+    "congo drc": "dr congo",
+    "republic of the congo": "congo",
+    "congo brazzaville": "congo",
+    "cape verde": "cabo verde",
+    "swaziland": "eswatini",
+    "sao tome": "são tomé and príncipe",
+    "czechia": "czech republic",
+    "holland": "netherlands",
+    "burma": "myanmar",
+    "the gambia": "gambia",
+    "south korea": "south korea",
+    "north korea": "north korea",
+    "myanmar": "myanmar",
+    "burma": "myanmar",
+    "afghanistan": "afghanistan",
+}
+
+# Two more majors the aliases/tests reference (kept separate so the big
+# table above stays readable).
+_WORLD_COUNTRIES["myanmar"] = (
+    "Myanmar", "Southeast Asia", "Naypyidaw", "Myanmar kyat (MMK)",
+    "Burmese", "Chairman of the State Administration Council Min Aung Hlaing (since 2021)",
+    "independent from Britain in 1948", "about 54 million (2025)", False)
+_WORLD_COUNTRIES["afghanistan"] = (
+    "Afghanistan", "South Asia", "Kabul", "Afghan afghani (AFN)",
+    "Pashto and Dari", "Supreme Leader Hibatullah Akhundzada (since 2021)",
+    "independent from Britain in 1919", "about 42 million (2025)", False)
+_WORLD_COUNTRIES["north korea"] = (
+    "North Korea", "East Asia", "Pyongyang", "North Korean won (KPW)",
+    "Korean", "Supreme Leader Kim Jong Un (since 2011)",
+    "a state since 1948", "about 26 million (2025)", False)
+
+# Major world cities -> country, so "where is new york" / "which country is
+# lagos in" answer instantly. Kenyan towns are deliberately absent - the
+# county resolver already answers those with richer detail.
+_WORLD_CITY_INDEX = {
+    "london": "united kingdom", "edinburgh": "united kingdom",
+    "manchester": "united kingdom", "birmingham": "united kingdom",
+    "glasgow": "united kingdom", "belfast": "united kingdom",
+    "paris": "france", "lyon": "france", "marseille": "france",
+    "berlin": "germany", "munich": "germany", "frankfurt": "germany",
+    "hamburg": "germany", "new york": "united states",
+    "new york city": "united states", "los angeles": "united states",
+    "chicago": "united states", "washington": "united states",
+    "washington dc": "united states", "boston": "united states",
+    "san francisco": "united states", "miami": "united states",
+    "houston": "united states", "toronto": "canada",
+    "vancouver": "canada", "montreal": "canada", "ottawa": "canada",
+    "mexico city": "mexico", "cancun": "mexico",
+    "havana": "cuba", "sao paulo": "brazil", "rio de janeiro": "brazil",
+    "brasilia": "brazil", "buenos aires": "argentina",
+    "santiago": "chile", "lima": "peru", "bogota": "colombia",
+    "lagos": "nigeria", "abuja": "nigeria", "kano": "nigeria",
+    "accra": "ghana", "kumasi": "ghana", "dakar": "senegal",
+    "abidjan": "côte d'ivoire", "bamako": "mali",
+    "ouagadougou": "burkina faso", "dar es salaam": "tanzania",
+    "dodoma": "tanzania", "kampala": "uganda", "kigali": "rwanda",
+    "kinshasa": "dr congo", "lubumbashi": "dr congo",
+    "brazzaville": "congo", "douala": "cameroon", "yaounde": "cameroon",
+    "luanda": "angola", "maputo": "mozambique", "harare": "zimbabwe",
+    "lusaka": "zambia", "lilongwe": "malawi", "gaborone": "botswana",
+    "windhoek": "namibia", "pretoria": "south africa",
+    "cape town": "south africa", "johannesburg": "south africa",
+    "durban": "south africa", "cairo": "egypt", "alexandria": "egypt",
+    "algiers": "algeria", "casablanca": "morocco", "rabat": "morocco",
+    "tunis": "tunisia", "tripoli": "libya", "khartoum": "sudan",
+    "juba": "south sudan", "asmara": "eritrea", "addis ababa": "ethiopia",
+    "mogadishu": "somalia", "djibouti": "djibouti", "niamey": "niger",
+    "bangui": "central african republic", "bissau": "guinea-bissau",
+    "conakry": "guinea", "freetown": "sierra leone",
+    "monrovia": "liberia", "lome": "togo", "porto novo": "benin",
+    "cotonou": "benin", "antananarivo": "madagascar",
+    "port louis": "mauritius", "victoria": "seychelles",
+    "moroni": "comoros", "praia": "cabo verde", "malabo": "equatorial guinea",
+    "tokyo": "japan", "osaka": "japan", "kyoto": "japan",
+    "beijing": "china", "shanghai": "china", "hong kong": "china",
+    "guangzhou": "china", "seoul": "south korea",
+    "pyongyang": "north korea", "singapore": "singapore",
+    "jakarta": "indonesia", "manila": "philippines",
+    "hanoi": "vietnam", "ho chi minh city": "vietnam",
+    "kuala lumpur": "malaysia", "bangkok": "thailand",
+    "new delhi": "india", "delhi": "india", "mumbai": "india",
+    "kolkata": "india", "chennai": "india", "bangalore": "india",
+    "karachi": "pakistan", "lahore": "pakistan", "islamabad": "pakistan",
+    "dhaka": "bangladesh", "kabul": "afghanistan",
+    "yangon": "myanmar", "tehran": "iran", "baghdad": "iraq",
+    "istanbul": "turkey", "ankara": "turkey", "tel aviv": "israel",
+    "jerusalem": "israel", "riyadh": "saudi arabia",
+    "jeddah": "saudi arabia", "abu dhabi": "united arab emirates",
+    "dubai": "united arab emirates", "doha": "qatar",
+    "moscow": "russia", "saint petersburg": "russia",
+    "kyiv": "ukraine", "kiev": "ukraine", "warsaw": "poland",
+    "prague": "czech republic", "budapest": "hungary",
+    "bucharest": "romania", "vienna": "austria", "zurich": "switzerland",
+    "geneva": "switzerland", "bern": "switzerland",
+    "brussels": "belgium", "amsterdam": "netherlands",
+    "rotterdam": "netherlands", "the hague": "netherlands",
+    "madrid": "spain", "barcelona": "spain", "lisbon": "portugal",
+    "rome": "italy", "milan": "italy", "naples": "italy",
+    "venice": "italy", "florence": "italy", "athens": "greece",
+    "stockholm": "sweden", "oslo": "norway", "copenhagen": "denmark",
+    "helsinki": "finland", "dublin": "ireland", "reykjavik": "iceland",
+    "sydney": "australia", "melbourne": "australia", "brisbane": "australia",
+    "perth": "australia", "adelaide": "australia", "canberra": "australia",
+    "auckland": "new zealand", "wellington": "new zealand",
+}
+
+def _resolve_country_name(subject):
+    """Normalize a phrase to a canonical _WORLD_COUNTRIES key, via direct
+    match, alias, or suffix stripping. Returns None when no country."""
+
+    def _canon(x):
+        return (x or "").strip().strip(" ?.!,").lower().strip()
+
+    def _lookup(x):
+        if not x:
+            return None
+        if x in _WORLD_COUNTRIES:
+            return x
+        a = _WORLD_ALIASES.get(x)
+        if a and a in _WORLD_COUNTRIES:
+            return a
+        for pre in ("the ", "republic of ", "federal republic of ",
+                    "democratic republic of "):
+            if x.startswith(pre):
+                key = _lookup(x[len(pre):])
+                if key:
+                    return key
+        return None
+
+    subj = _canon(subject)
+    if not subj:
+        return None
+    return _lookup(subj)
+
+def _zip_padded(items):
+    """Two-column pairing, padding the final row so the columns balance."""
+    half = (len(items) + 1) // 2
+    left = items[:half]
+    right = items[half:]
+    if len(right) < len(left):
+        right = list(right) + [""] * (len(left) - len(right))
+    return zip(left, right)
+
+_AFRICA_KEYS = frozenset(
+    _k for _k, (_n, _reg, *_rest) in _WORLD_COUNTRIES.items()
+    if _reg.endswith("Africa"))
+
+def _country_extract(key):
+    """Builds the offline 'always-correct' text block for a country key."""
+    _n, _reg, _cap, _cur, _lang, _off, _ind, _pop, _eac = _WORLD_COUNTRIES[key]
+    lines = [
+        f"{_n} is a country in {_reg}.",
+        f"Capital: {_cap}.",
+        f"Official languages: {_lang}.",
+        f"Currency: {_cur}.",
+        f"Head of state/government: {_off}.",
+        _ind.rstrip(".") if _ind.endswith(".") else _ind,
+        _pop,
+    ]
+    if _eac:
+        lines.append("Member of the East African Community (EAC).")
+    return " ".join(lines).replace("..", ".")
+
+
+# ---------------------------------------------------------------------------
 # The rest of the mega factbase, in themed blocks.
 # ---------------------------------------------------------------------------
 _EXTRA_KENYA_FACTS = {
@@ -2823,12 +3363,17 @@ class WebReader:
         "ar": "https://ar.wikipedia.org",
         "ru": "https://ru.wikipedia.org",
         "ja": "https://ja.wikipedia.org",
+        "nl": "https://nl.wikipedia.org",
+        "it": "https://it.wikipedia.org",
+        "pl": "https://pl.wikipedia.org",
+        "id": "https://id.wikipedia.org",
     }
     # First probe always English or Swahili-first for Kenyan topics;
     # the longer tail widens global recall for obscure subjects. The
     # 20s budget still caps how many of those probes ever fire.
     _WIKI_LANGS = ("simple", "en", "sw", "fr",
-                   "de", "es", "pt", "zh", "hi", "ar", "ru", "ja")
+                   "de", "es", "pt", "zh", "hi", "ar", "ru", "ja",
+                   "nl", "it", "pl", "id")
     _WIKIQUOTE_HOST = "https://en.wikiquote.org"
     _WIKTIONARY_HOST = "https://en.wiktionary.org"
     _WIKTIONARY_HOSTS = {
@@ -3158,6 +3703,215 @@ class WebReader:
         # 6) nothing Kenya-specific - let the rest of the chain answer.
         return None
 
+    def country_fact_lookup(self, query: str):
+        """Offline, instant world lookup from the country factbase
+        (Africa 55 + major world countries). Returns a result dict or
+        {"error"}. Also answers the continent/EAC "how many" and "list"
+        forms."""
+        topic = query.strip().strip(".").lower()
+        if not topic:
+            return {"error": "what should I look up?"}
+        _listy = ("list" in topic or "all" in topic or "names" in topic
+                  or "how many" in topic or "countries of" in topic)
+        _africa_mention = ("africa" in topic.lower() and ("countr" in topic))
+        if _africa_mention and _listy:
+            if "how many" in topic:
+                return {
+                    "title": "How many countries in Africa?",
+                    "extract": "Africa has 55 recognised countries - all 55 "
+                               "are African Union members, and 54 of them are "
+                               "United Nations members (Western Sahara is the "
+                               "disputed exception). Kenya alone shares "
+                               "borders with Tanzania, Uganda, South Sudan, "
+                               "Ethiopia and Somalia.",
+                    "url": "https://en.wikipedia.org/wiki/List_of_sovereign_states_and_dependent_territories_in_Africa",
+                    "source": "World factbase",
+                }
+            names = sorted(set(_n for _k, (_n, *_rest) in _WORLD_COUNTRIES.items()
+                               if _k in _AFRICA_KEYS))
+            cols = "\n".join(
+                f"  {a}  |  {b}" for a, b in _zip_padded(names))
+            return {
+                "title": "All 55 countries of Africa",
+                "extract": f"Africa has {len(names)} countries "
+                           f"(all African Union members):\n{cols}",
+                "url": ("https://en.wikipedia.org/wiki/"
+                        "List_of_sovereign_states_and_dependent_territories_in_Africa"),
+                "source": "World factbase",
+            }
+        key = _resolve_country_name(topic)
+        if not key:
+            return {"error": f"no world factbase entry for '{query}'"}
+        _n, _reg, _cap, _cur, _lang, _off, _ind, _pop, _eac = _WORLD_COUNTRIES[key]
+        return {
+            "title": _n,
+            "extract": _country_extract(key),
+            "url": "https://en.wikipedia.org/wiki/" + _n.replace(" ", "_"),
+            "source": "World factbase",
+        }
+
+    def country_fact_qa(self, query: str):
+        """Instant world Q&A from the country factbase: 'who is the
+        president of france', 'capital of tanzania', 'which country is
+        lagos in', 'how many countries in africa'. Returns a result dict
+        or None so non-world questions keep flowing to Kenya/the chain."""
+        q = (query or "").strip().strip("?").strip(".").lower()
+        q = _WS_RE.sub(" ", q)
+        if not q:
+            return None
+
+        # EAC membership forms
+        if re.search(r"\beac\b", q) and re.search(r"\b(countr|member|state)", q):
+            lines = [_n for _k, (_n, *_rest) in _WORLD_COUNTRIES.items()
+                     if _rest[-1]]
+            return {
+                "title": "East African Community",
+                "extract": ("The East African Community (EAC) has 8 member "
+                            "states: " + ", ".join(lines) + "."
+                            ),
+                "url": "https://en.wikipedia.org/wiki/East_African_Community",
+                "source": "World factbase",
+            }
+        if re.search(r"\bhow many countries\b.*\bafrica\b", q) \
+                or re.search(r"\bafrica\b.*\bhow many countries\b", q):
+            return {
+                "title": "How many countries in Africa?",
+                "extract": ("Africa has 55 recognised countries - all African "
+                            "Union members; 54 of them are UN members "
+                            "(Western Sahara is the contested exception)."),
+                "url": ("https://en.wikipedia.org/wiki/"
+                        "List_of_sovereign_states_and_dependent_territories_in_Africa"),
+                "source": "World factbase",
+            }
+        if re.search(r"\b(list|all|name|names)\b.*\bcountries\b.*\bafrica\b", q):
+            names = sorted(set(_n for _k, (_n, *_rest)
+                               in _WORLD_COUNTRIES.items()
+                               if _k in _AFRICA_KEYS))
+            cols = "\n".join(
+                f"  {a}  |  {b}" for a, b in _zip_padded(names))
+            return {
+                "title": "All 55 countries of Africa",
+                "extract": f"Africa has {len(names)} countries:\n{cols}",
+                "url": ("https://en.wikipedia.org/wiki/"
+                        "List_of_sovereign_states_and_dependent_territories_in_Africa"),
+                "source": "World factbase",
+            }
+
+        # role questions: "who is the president/prime minister/... of X"
+        m = re.search(
+            r"\b(?:who is|who was|who's|who are|tell me who)\s+"
+            r"(?:the\s+)?(president|prime minister|p m|chancellor|monarch|"
+            r"king|queen|emperor|sultan|emir|supreme leader|head of state|"
+            r"head of government|ruler|leader)\s+of\s+(.+?)\s*$", q)
+        if m:
+            leader = m.group(1)
+            cname = _resolve_country_name(m.group(2))
+            if cname:
+                _n, _reg, _cap, _cur, _lang, _off, _ind, _pop, _eac = _WORLD_COUNTRIES[cname]
+                return {
+                    "title": f"{leader.title()} of {_n}",
+                    "extract": f"{_n}'s {leader} is {_off} (world factbase, "
+                               f"as of 2026).",
+                    "url": "https://en.wikipedia.org/wiki/" + _n.replace(" ", "_"),
+                    "source": "World factbase",
+                }
+
+        # capital: "what is the capital of france"
+        m = re.search(r"\bcapital of\s+(.+?)\s*$", q)
+        if m:
+            cname = _resolve_country_name(m.group(1))
+            if cname:
+                _n, _reg, _cap, *_rest = _WORLD_COUNTRIES[cname]
+                return {
+                    "title": f"Capital of {_n}",
+                    "extract": (f"The capital of {_n} is {_cap}. "
+                                f"{_n} is in {_reg}."),
+                    "url": "https://en.wikipedia.org/wiki/" + _n.replace(" ", "_"),
+                    "source": "World factbase",
+                }
+
+        # currency: "what currency does japan use", "currency of mexico"
+        if re.search(r"\bcurrency\b", q):
+            m = (re.search(r"\bcurrency of\s+(.+?)\s*$", q)
+                 or re.search(r"\bwhat currency (?:does|do)\s+(.+?)\s+use\s*$", q))
+            if m:
+                cname = _resolve_country_name(m.group(1))
+                if cname:
+                    _n, _reg, _cap, _cur, *_rest = _WORLD_COUNTRIES[cname]
+                    return {
+                        "title": f"Currency of {_n}",
+                        "extract": f"{_n} uses the {_cur}.",
+                        "url": "https://en.wikipedia.org/wiki/" + _n.replace(" ", "_"),
+                        "source": "World factbase",
+                    }
+
+        # population: "population of kenya"
+        if re.search(r"\bpopulation\b", q):
+            m = re.search(r"\bpopulation of\s+(.+?)\s*$", q)
+            if m:
+                cname = _resolve_country_name(m.group(1))
+                if cname:
+                    _n, _reg, _cap, _cur, _lang, _off, _ind, _pop, _eac = _WORLD_COUNTRIES[cname]
+                    return {
+                        "title": f"Population of {_n}",
+                        "extract": f"{_n} has a population of {_pop}.",
+                        "url": "https://en.wikipedia.org/wiki/" + _n.replace(" ", "_"),
+                        "source": "World factbase",
+                    }
+
+        # where/which-country: "which country is lagos in", "where is paris"
+        m = (re.search(r"\bwhich country (?:is|has)\s+(.+?)\s*$", q)
+             or re.search(r"\bwhat country (?:is|has)\s+(.+?)\s*$", q)
+             or re.match(r"^where\s+(?:is|are)\s+(.+?)\s*$", q))
+        if m:
+            subj = m.group(1).strip().strip("?").strip(".").strip()
+            subj = re.sub(r"\s+in\s*$", "", subj).strip()
+            if _resolve_county_name(subj) or subj.strip().lower() in ("nairobi", "mombasa"):
+                return None  # a Kenyan place - let Kenya answer first
+            ckey = _WORLD_CITY_INDEX.get(subj.lower())
+            if ckey:
+                _n, _reg, _cap, _cur, _lang, _off, _ind, _pop, _eac = _WORLD_COUNTRIES[ckey]
+                return {
+                    "title": f"{_cap_name(subj)} is in {_n}",
+                    "extract": f"{_cap_name(subj)} is in {_n} (capital: {_cap}).",
+                    "url": "https://en.wikipedia.org/wiki/" + _n.replace(" ", "_"),
+                    "source": "World factbase",
+                }
+
+        return None
+
+    def country_facts(self, topic: str, n: int = 5):
+        """Bulleted country-fact list for '5 facts about ghana'. Returns
+        a result dict or None when the topic isn't a world country."""
+        try:
+            n = max(1, min(int(n), 12))
+        except Exception:
+            n = 5
+        t = (topic or "").strip().strip("?").strip(".").lower()
+        if not t:
+            return None
+        key = _resolve_country_name(t)
+        if not key:
+            return None
+        _n, _reg, _cap, _cur, _lang, _off, _ind, _pop, _eac = _WORLD_COUNTRIES[key]
+        facts = [
+            f"{_n} is a country in {_reg}.",
+            f"Capital: {_cap}.",
+            f"Official languages: {_lang}.",
+            f"Currency: {_cur}.",
+            _ind.rstrip(".") + "." if not _ind.endswith(".") else _ind,
+            f"Population: {_pop}.",
+            f"Head of state/government: {_off}.",
+        ]
+        if _eac:
+            facts.append("Member of the East African Community (EAC).")
+        return {
+            "title": f"{n} facts about {_n}",
+            "extract": "\n".join(f"  - {f}" for f in facts[:n]),
+            "url": "https://en.wikipedia.org/wiki/" + _n.replace(" ", "_"),
+            "source": "World factbase",
+        }
+
     def facts_list(self, topic: str, n: int = 5):
         """'10 facts about X' / 'facts about X'. For counties the answer
         is structured straight from the profile; for other factbase
@@ -3206,6 +3960,9 @@ class WebReader:
                 "url": entry["url"],
                 "source": "Kenya factbase",
             }
+        # world countries ("5 facts about ghana")
+        if _resolve_country_name(t):
+            return self.country_facts(t, n)
         return None
 
     def format_facts(self, query: str, n: int = 5):
@@ -3469,9 +4226,11 @@ class WebReader:
         """Deep, Kenya-centralized multi-source lookup. Walks, in order:
           0. Kenya factbase (offline, instant, always-correct)
           0a. Natural Kenya questions (governor/capital/which-county)
+          0ab. World factbase + world Q&A (capital/president/currency/
+              population of 55 African + major world countries)
           1. Wikipedia REST summaries - language order depends on
              whether the query is Kenyan (sw first) or not, with a
-             ~12-language tail widening global recall for misses
+             ~16-language tail widening global recall for misses
           2. Wikipedia title search -> full extract of the match
           3. Deep full-article extracts (en, then sw)
           4. Wiktionary (words & phrases) and Wikiquote (people)
@@ -3506,6 +4265,16 @@ class WebReader:
         qa = self.kenya_fact_qa(topic)
         if qa:
             return qa
+
+        # 0ab) World factbase - offline Africa 55 + major countries
+        # ("capital of france", "president of tanzania", "population of
+        # kenya"). Complements, never shadows: Kenya answered above.
+        wqa = self.country_fact_qa(topic)
+        if wqa:
+            return wqa
+        wc = self.country_fact_lookup(topic)
+        if "error" not in wc:
+            return wc
 
         # 0b) Curated Swahili/French phrase dictionary also answers
         # instantly and is verified, so it must come BEFORE Wikipedia:
@@ -3930,9 +4699,10 @@ class WebReader:
 
     def format_lookup(self, query: str) -> str:
         """Human-friendly reply for the 'look up <topic>' command. Walks
-        the deep multi-source lookup chain (Kenya factbase, Wikipedia in
-        12 languages, full extracts, Wiktionary, Wikiquote, Wikidata,
-        then merged web search with a deep read of the top result)."""
+        the deep multi-source lookup chain (Kenya factbase, world factbase,
+        Wikipedia in 16 languages, full extracts, Wiktionary, Wikiquote,
+        Wikidata, then merged web search with a deep read of the top
+        result)."""
         result = self.lookup(query)
         if "error" in result:
             # maybe no network or no article - say so gracefully

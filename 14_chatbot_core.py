@@ -771,6 +771,27 @@ class ChatBot:
             self._handle_look_up,
         )
         e.register(
+            "country_fact_qa",
+            [r"\bwho (?:is|was|are|'s)\b.*\b(?:president|prime minister|"
+             r"chancellor|monarch|king|queen|emperor|sultan|emir|supreme leader|"
+             r"head of state|head of government|ruler|leader)\b.*\bof\b",
+             r"\b(?:the\s+)?(?:president|prime minister|chancellor|king|queen|"
+             r"monarch|sultan|emir|emperor)\s+of\b",
+             r"\bwhat is the capital of\b",
+             r"\bcapital of\b",
+             r"\bwhich country (?:is|has)\b",
+             r"\bwhat country (?:is|has)\b",
+             r"\bhow many countries\b",
+             r"\b(?:list|all|name)\b.*\bcountries\b.*\bafrica\b",
+             r"\bcountries\b.*\b(?:in|of)\s+the\s+eac\b",
+             r"\beac\b.*\b(countr|member|state)s?\b",
+             r"\bcurrency of\b",
+             r"\bwhat currency\b",
+             r"\bpopulation of\b",
+             r"\bwhere (?:is|are)\s+(?!my\b)([a-z][a-z0-9' .\-]{1,40})\s*$"],
+            self._handle_country_fact_qa,
+        )
+        e.register(
             "kenya_fact_qa",
             [r"\bwho (?:is|was|are)\b.*\bgovernor\b",
              r"\bwho (?:is|was|are)\b.*\bgoverns\b",
@@ -3164,24 +3185,27 @@ WEB LOOKUP & BROWSING (need internet; fail closed if offline)
                                               instant offline Kenya factbase
                                               (country, towns/counties, heroes,
                                               presidents, schools, universities,
-                                              landmarks), Swahili-first Wikipedia
-                                              for Kenyan topics, Wikipedia in 12
-                                              languages (simple/en/sw/fr/de/es/
-                                              pt/zh/hi/ar/ru/ja) widening global
-                                              recall, full-article extracts,
-                                              Wiktionary (en + Swahili edition),
-                                              Wikiquote, Wikidata structured
-                                              facts (population, born, country),
-                                              OpenStreetMap place lookup
-                                              (Kenya-first), then a merged
-                                              DuckDuckGo + Bing web search with
-                                              recent Google News that boosts
-                                              Kenyan outlets (Nation, Citizen,
-                                              Standard, BBC Africa) and
-                                              deep-reads up to two result pages
-                                              - so local schools, clubs,
-                                              products and news all get real
-                                              answers
+                                              landmarks) PLUS a world factbase
+                                              (all 55 African countries + the
+                                              major world ones), Swahili-first
+                                              Wikipedia for Kenyan topics,
+                                              Wikipedia in 16 languages
+                                              (simple/en/sw/fr/de/es/pt/zh/hi/
+                                              ar/ru/ja/nl/it/pl/id) widening
+                                              global recall, full-article
+                                              extracts, Wiktionary (en + Swahili
+                                              edition), Wikiquote, Wikidata
+                                              structured facts (population,
+                                              born, country), OpenStreetMap
+                                              place lookup (Kenya-first), then
+                                              a merged DuckDuckGo + Bing web
+                                              search with recent Google News
+                                              that boosts Kenyan outlets
+                                              (Nation, Citizen, Standard, BBC
+                                              Africa) and deep-reads up to two
+                                              result pages - so local schools,
+                                              clubs, products and news all get
+                                              real answers
               "look up nakuru county"     -> off the Kenya factbase (instant)
               "who is the governor of busia" -> instant Kenya Q&A from the
                                               factbase - governors (all 47
@@ -3189,10 +3213,18 @@ WEB LOOKUP & BROWSING (need internet; fail closed if offline)
                                               "who's the chief justice", "what
                                               is the capital of X", "which
                                               county is X in", "where is X"
-              "5 facts about nairobi"     -> bulleted fact lists (counties get
-                                              structured profiles); try "facts
-                                              about kenya", "kaunti zote za
-                                              kenya" (the 47 counties)
+"5 facts about nairobi"     -> bulleted fact lists (counties get
+                                                  structured profiles); try "facts
+                                                  about kenya", "kaunti zote za
+                                                  kenya" (the 47 counties)
+              "who is the president of france" -> instant world Q&A from the
+                                                  offline country factbase -
+                                                  "capital of tanzania", "which
+                                                  country is lagos in", "where is
+                                                  london", "currency of japan",
+                                                  "population of kenya", "how
+                                                  many countries in africa",
+                                                  "5 facts about ghana"
               "look up heri"              -> Swahili/French phrases answered
                                              via a hand-verified dictionary
               "search the web for ai"     -> same lookup, loose phrasing
@@ -4186,6 +4218,17 @@ WEB LOOKUP & BROWSING (need internet; fail closed if offline)
         if not topic:
             return "What would you like me to look up?"
         return self.web_reader.format_lookup(topic)
+
+    def _handle_country_fact_qa(self, text, m):
+        """Instant world Q&A ('who is the president of france', 'capital
+        of tanzania', 'which country is lagos in') from the offline
+        world factbase. Returns None for non-country queries so the
+        Kenya facts and the full lookup chain still get their turn."""
+        result = self.web_reader.country_fact_qa(text)
+        if result and "extract" in result:
+            return (f"{result['title']}\n\n{result['extract']}\n\n"
+                    f"(Source: {result['source']} - {result['url']})")
+        return None
 
     def _handle_kenya_fact_qa(self, text, m):
         """Instant Kenya Q&A ('who is the governor of busia', 'capital
