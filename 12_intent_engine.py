@@ -779,6 +779,14 @@ class TypoCorrector:
             "mlima", "mto", "ziwa", "maji", "chakula", "maziwa", "mtoto",
             "watoto", "baba", "mama", "dada", "kaka", "nani", "wapi", "lini",
             "kwa", "na", "ya", "za", "wa", "ni", "si", "tu", "lakini",
+            # Kenyan names (ruto -> "auto", moi -> "mai", kibaki -> ...
+            # are false corrections that wreck Kenyan lookups).
+            "ruto", "moi", "kibaki", "kenyatta", "odinga", "mboya",
+            "maathai", "kipchoge", "kimathi", "wafula", "wanyama", "mutai",
+            "kamaa", "meru", "nakuru", "isiolo", "mahiga", "mandera",
+            "nanyuki", "nyeri", "naivasha", "kisumu", "mombasa", "nairobi",
+            "lamu", "malindi", "eldoret", "thika", "kericho", "kakamega",
+            "kajiado", "narok", "samburu", "turkana", "baringo", "laikipia",
         }
 
         # Efficiency: _correct_word() used to loop over ALL of

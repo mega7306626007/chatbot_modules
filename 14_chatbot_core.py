@@ -3134,17 +3134,27 @@ class ChatBot:
 
             WEB LOOKUP & BROWSING (need internet; fail closed if offline)
               "look up elephant"          -> deep multi-source lookup (no API
-                                             keys): Wikipedia in 4 languages
-                                             (simple/en/sw/fr), full-article
-                                             extracts, Wiktionary (words),
-                                             Wikiquote (people), then a merged
-                                             DuckDuckGo + Bing web search that
-                                             deep-reads the top result page -
-                                             so local schools, clubs, products
-                                             and news all get real answers
-              "search the web for ai"     -> same lookup, loose phrasing
-              "look up kwa heri"          -> Swahili/French phrases answered
+                                             keys), Kenya-centralized: an
+                                             instant offline Kenya factbase
+                                             (country, towns/counties, heroes,
+                                             presidents, schools, universities,
+                                             landmarks), Swahili-first Wikipedia
+                                             for Kenyan topics, Wikipedia in 4
+                                             languages (simple/en/sw/fr),
+                                             full-article extracts, Wiktionary
+                                             (en + Swahili edition), Wikiquote,
+                                             OpenStreetMap place lookup
+                                             (Kenya-first), then a merged
+                                             DuckDuckGo + Bing web search with
+                                             recent Kenyan-flavoured Google
+                                             News that deep-reads up to two
+                                             result pages - so local schools,
+                                             clubs, products and news all get
+                                             real answers
+              "look up nakuru county"     -> off the Kenya factbase (instant)
+              "look up heri"              -> Swahili/French phrases answered
                                              via a hand-verified dictionary
+              "search the web for ai"     -> same lookup, loose phrasing
               "read https://example.com"  -> fetch + summarize a page with
                                              BeautifulSoup (skips menus/nav)
               "screenshot https://example.com" -> headless-Chrome screenshot,
