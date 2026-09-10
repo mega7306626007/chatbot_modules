@@ -69,6 +69,10 @@ _MODULE_FILES = [
     "31_word_games.py",
     "33_web_server.py",
     "34_offline_scene_generator.py",
+    # Web scraping (BeautifulSoup) + headless browser automation
+    # (Selenium) - both optional/fail-closed; must load before
+    # 14_chatbot_core.py which instantiates them in ChatBot.__init__.
+    "36_web_scrape.py",
     # Trained neural story generator (Section 14C) - loads model_cache/
     # weights at runtime; must load before 14_chatbot_core.py which
     # instantiates StoryLanguageModel in ChatBot.__init__.

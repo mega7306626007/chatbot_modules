@@ -765,6 +765,9 @@ class TypoCorrector:
         self._known_words |= {
             "bar", "psi", "atm", "kb", "mb", "gb", "tb", "ml", "tsp", "tbsp",
             "mph", "kmh", "kph", "kcal", "cal", "hectares", "acres", "knots",
+            "web", "website", "site", "internet", "wikipedia", "online",
+            "mtandao", "intaneti", "kwenye", "serne", "cherche", "regarde",
+            "ouvre", "liste", "page", "navigue", "tafuta", "fungua", "soma",
         }
 
         # Efficiency: _correct_word() used to loop over ALL of
@@ -1685,6 +1688,22 @@ class KeywordTopicMatcher:
                 "j'aime les nouvelles technologies", 'cette application est super',
                 "l'actualité tech", 'nouveau gadget cool', 'ma maison connectée',
                 'la technologie qui a changé ma vie', 'meilleure tech au monde'],
+        },
+        "web_browsing_topic": {
+            "en": [ 'search the web for', 'look up', 'look this up online', 'browse the web',
+                'search online', 'surf the internet', 'read me that page', 'fetch that url',
+                'scrape that website', 'what does the internet say about', 'find it online',
+                'check that website for me', 'open that link', 'search wikipedia for'],
+            "sw": [ 'tafuta kwenye mtandao', 'tafuta mtandaoni', 'nitafutie', 'tafuta kwenye wavuti',
+                'fungua tovuti hiyo', 'soma ukurasa huo', 'tafuta wikipedia',
+                'mtandao unasema nini kuhusu', 'niona mtandao', 'tafuta kwenye intaneti',
+                'niona tovuti', 'fungua tovuti', 'soma ukurasa', 'tafuta google',
+                'nilionea mtandao', 'tafuta kwenye google'],
+            "fr": [ 'cherche sur le web', 'cherche en ligne', 'regarde sur internet',
+                'cherche sur wikipedia', 'ouvre ce site', 'lis cette page',
+                'que dit internet à propos de', 'cherche pour moi', 'va voir sur le web', 'navigue sur le web',
+                'cherche sur internet', 'regarde la page', 'cherche des infos sur',
+                'cherche sur google', 'ouvre la page', 'regarde cette page'],
         },
         "pets_animals_topic": {
             "en": [ 'my dog', 'my cat', 'my pet', 'favorite animal', 'love animals', 'i have a pet dog',

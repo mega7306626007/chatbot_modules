@@ -221,6 +221,13 @@ class ChatBot:
         # image instead of classifying one (Section 12B).
         self.image_generator = CNNImageGenerator()
         self.scene_generator = OfflineSceneGenerator()
+        # Web reading (BeautifulSoup, optional) + headless browser
+        # automation (Selenium, optional, lazy). Always instantiated so
+        # the commands exist even where the optional deps are missing -
+        # they degrade to a clear "not available here" instead of
+        # crashing. See 36_web_scrape.py.
+        self.web_reader = WebReader()
+        self.browser = BrowserSession()
         # New in this revision: a torch contrastive sentence-embedding
         # search index (Section 6H3), a Keras LSTM mood-trend forecaster
         # (Section 6H2), and a small set of opt-in/no-key REST API
@@ -750,6 +757,23 @@ class ChatBot:
             "define_word",
             [r"\bdefine[:\s]+(\w+)\b", r"\bwhat does (\w+) mean\b", r"\bwhat is the definition of (\w+)\b"],
             self._handle_define_word,
+        )
+        e.register(
+            "read_url",
+            [r"\b(?:read|fetch|scrape)(?: the page| the url| the site)?[:\s]+(\S+\.\S+)",
+             r"\bwhat('?s| is) on[:\s]+(\S+\.\S+)"],
+            self._handle_read_url,
+        )
+        e.register(
+            "look_up",
+            [r"\blook up[:\s]+(.+)", r"\btell me about[:\s]+(.+)",
+             r"\bsearch (?:the web|wikipedia|online)[:\s]+(.+)"],
+            self._handle_look_up,
+        )
+        e.register(
+            "browser_screenshot",
+            [r"\b(?:screenshot|snap|show me) (?:of |the page )?(.+\.\S+)"],
+            self._handle_browser_screenshot,
         )
         e.register(
             "image_text_regions",
@@ -3108,6 +3132,17 @@ class ChatBot:
               "what's in the news"        -> top headlines (Hacker News)
               "define: serendipity"       -> real dictionary lookup
 
+            WEB LOOKUP & BROWSING (need internet; fail closed if offline)
+              "look up elephant"          -> Wikipedia summary (no API key)
+              "search the web for ai"     -> same lookup, loose phrasing
+              "read https://example.com"  -> fetch + summarize a page with
+                                             BeautifulSoup (skips menus/nav)
+              "screenshot https://example.com" -> headless-Chrome screenshot,
+                                             saved as a PNG (needs Selenium +
+                                             Chrome installed locally)
+              Also in Swahili ("tafuta kwenye mtandao X", "soma ukurasa"),
+              and French ("cherche sur le web X", "lis cette page").
+
             MEMORY SEARCH & CONVERSATION TOOLS
               "search my memory for X"    -> semantic search over remembered
                                              facts (torch embeddings when
@@ -4069,6 +4104,43 @@ class ChatBot:
             return "What word would you like me to define?"
         return self.dictionary_api.format_definition(word)
 
+    def _handle_read_url(self, text, m):
+        """Fetch a URL and summarize its readable text with
+        BeautifulSoup (Section 13C). Fails closed if bs4 or the network
+        is unavailable."""
+        url = (m.group(1) or m.group(2) or "").strip()
+        if not url:
+            return "Give me a URL to read - for example, 'read https://simple.wikipedia.org'."
+        if not self.web_reader.bs4_available():
+            return "Reading pages needs the BeautifulSoup package, which isn't installed here."
+        return self.web_reader.format_read_page(url)
+
+    def _handle_look_up(self, text, m):
+        """Wikipedia summary lookup (Section 13C) - real HTTP, no API
+        key, fail-closed."""
+        topic = (m.group(1) or "").strip()
+        topic = re.sub(
+            r"^(?:for|about|in|on|at|the|kwenye|mtandao|sur|de|le|la|internet|intaneti|web)\s+",
+            "", topic, flags=re.IGNORECASE).strip()
+        if not topic:
+            return "What would you like me to look up?"
+        return self.web_reader.format_lookup(topic)
+
+    def _handle_browser_screenshot(self, text, m):
+        """Headless-browser screenshot (Section 13C). Returns the
+        saved image path on success, or a clear fail-closed message."""
+        url = (m.group(1) or "").strip()
+        if not url or "." not in url:
+            return "Give me a full URL to screenshot - for example, 'screenshot https://example.com'."
+        if not self.browser.available():
+            return "Browser automation needs Selenium + Chrome, which aren't available here."
+        out_path = os.path.join(GENERATED_DIR, f"browser_shot_{int(time.time())}.png") \
+            if "GENERATED_DIR" in globals() else f"browser_shot_{int(time.time())}.png"
+        result = self.browser.screenshot(url, out_path)
+        if "error" in result:
+            return f"Browser automation couldn't screenshot that page: {result['error']}."
+        return f"Here's a screenshot of {url}: {result['path']}"
+
     def _handle_image_text_regions(self, text, m):
         """MSER-based text-region detection (OpenCV, Section 12) - a
         quick 'does this look like it has text' signal, not OCR."""
@@ -4989,6 +5061,39 @@ class ChatBot:
         if topic == "help_topic":
             self._mark_topic_resolved(topic)
             return self._handle_help(user_text, None)
+
+        # The flexible matcher catches loose web-browsing phrasings
+        # ("search the web for X", "look it up", "lis cette page").
+        # Strip the filler words and feed the remainder to the real
+        # web reader (Section 13C) - it fails closed gracefully when
+        # the network or bs4 is unavailable.
+        if topic == "web_browsing_topic":
+            query = re.sub(
+                r"^\s*(?:"
+                r"search (?:the web|wikipedia|online|the internet|for)|"
+                r"surf (?:the |the internet|the web|online)|browse (?:the |online|the web|the internet)|"
+                r"look (?:it |this |that )?up online|look this up online|look up|find it online|"
+                r"what does (?:the )?internet say about|open (?:that link|this link|that url|this url|a link)|"
+                r"fetch (?:that url|this url|a url)|scrape (?:that website|this website)|"
+                r"read (?:me (?:that|this) page|that page|this page)|check (?:that website|this website|that site) for me|"
+                r"read|fetch|scrape|check|find|open|browse|look|surf|"
+                r"tafuta (?:kwenye )?(?:mtandao|mtandaoni|wavuti|intaneti|google|wikipedia)|"
+                r"tafuta wikipedia|tafuta google|nitafutie (?:kwenye )?(?:mtandao|mtandaoni|intaneti)|"
+                r"fungua (?:tovuti|ukurasa)|soma (?:ukurasa|tovuti)|niona (?:tovuti|mtandao|ukurasa)|"
+                r"tafuta|fungua|soma|niona|"
+                r"cherche (?:sur (?:le web|internet|wikipedia)|en ligne|des infos sur|pour moi|sur google)|"
+                r"regarde (?:sur internet|la page|cette page)|ouvre (?:ce site|la page|cette page)|"
+                r"lis (?:cette page|la page)|va voir sur le web|navigue sur le web|cercher|cherche|"
+                r"regarde|ouvre|lis|navigue|va voir"
+                r")\b[\s:]*(?:kwenye\s+)?",
+                "", user_text, flags=re.IGNORECASE).strip()
+            query = query.strip(" .,;:!?")
+            if query and len(query) > 2:
+                self._mark_topic_resolved(topic)
+                return self.web_reader.format_lookup(query)
+            self._mark_topic_resolved(topic)
+            return ("I can search the web for things - just say 'look up <topic>'. " +
+                    "| Naweza kutafuta mtandaoni - sema 'look up <topic>'.")
 
         # Topics where the exact value matters (time, date, age, math,
         # to-do list) are too risky to answer from keywords alone, so we
