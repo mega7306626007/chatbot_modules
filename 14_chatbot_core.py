@@ -818,6 +818,16 @@ class ChatBot:
             self._handle_facts_list,
         )
         e.register(
+            "daily_news",
+            [r"\bdaily news\b",
+             r"\btoday'?s (?:top )?(?:news|headlines|stories)\b",
+             r"\btop (?:news|headlines|stories) today\b",
+             r"\bnews of the day\b",
+             r"\bglobal digest\b",
+             r"\bmajor (?:world )?news\b"],
+            self._handle_daily_news,
+        )
+        e.register(
             "browser_screenshot",
             [r"\b(?:screenshot|snap|show me) (?:of |the page )?(.+\.\S+)"],
             self._handle_browser_screenshot,
@@ -3177,6 +3187,13 @@ class ChatBot:
               "online trivia"             -> fresh question (Open Trivia DB),
                                              falls back to my offline bank
               "what's in the news"        -> top headlines (Hacker News)
+              "daily news" / "today's headlines" -> opens Global Digest, a
+                                             separate site that self-updates
+                                             daily with the world's ~20 major
+                                             stories (~16 global + 10 Kenyan),
+                                             each with a picture and a Read
+                                             more link (built in its own repo
+                                             on GitHub Pages)
               "define: serendipity"       -> real dictionary lookup
 
 WEB LOOKUP & BROWSING (need internet; fail closed if offline)
@@ -4098,6 +4115,20 @@ WEB LOOKUP & BROWSING (need internet; fail closed if offline)
         Section 13's strengthening pass."""
         story_type = m.group(1).lower()
         return self.news_api.format_headlines(limit=5, story_type=story_type)
+
+    def _handle_daily_news(self, text, m):
+        """Points at Global Digest, the separately-built daily top-20
+        news site (~16 major world + ~10 Kenyan stories, each with a
+        picture and a Read-more link). The site lives in its own repo
+        and is rebuilt every morning on GitHub Actions/Sphinx-era cron,
+        served from GitHub Pages, so pychat itself does no scraping
+        here - it just hands over a link."""
+        return ("Here's today's Global Digest — the world's ~20 major "
+                "stories (16 global + 10 Kenyan) with pictures and "
+                "Read-more links:\n"
+                "→ https://mega7306626007.github.io/global-digest/\n"
+                "(It's built in its own repo and refreshes automatically "
+                "every morning at 06:00 EAT.)")
 
     def _handle_find_duplicate_facts(self, text, m):
         """
@@ -5297,6 +5328,7 @@ ChatBot._NN_AUTO_DISPATCH_LABELS = {
     "todo_list": ChatBot._handle_todo_list,
     "hangman_start": ChatBot._handle_hangman_start,
     "help": ChatBot._handle_help,
+    "daily_news": ChatBot._handle_daily_news,
 }
 
 
