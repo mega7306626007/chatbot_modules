@@ -86,3 +86,18 @@ document.querySelectorAll('[data-fill]').forEach((button) => {
     input.setSelectionRange(input.value.length, input.value.length);
   });
 });
+
+const scrollUp = document.querySelector('#scroll-up');
+const scrollDown = document.querySelector('#scroll-down');
+scrollUp?.addEventListener('click', () => conversation.scrollTo({ top: 0, behavior: 'smooth' }));
+scrollDown?.addEventListener('click', () => conversation.scrollTo({ top: conversation.scrollHeight, behavior: 'smooth' }));
+// hide/show based on scroll position (optional polish — never fully hidden, just dimmed at limits)
+function updateScrollButtons() {
+  if (!conversation) return;
+  const atTop = conversation.scrollTop <= 10;
+  const atBottom = conversation.scrollTop + conversation.clientHeight >= conversation.scrollHeight - 10;
+  if (scrollUp) scrollUp.style.opacity = atTop ? '0.45' : '0.92';
+  if (scrollDown) scrollDown.style.opacity = atBottom ? '0.45' : '0.92';
+}
+conversation?.addEventListener('scroll', updateScrollButtons);
+updateScrollButtons();
