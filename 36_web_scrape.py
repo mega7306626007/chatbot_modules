@@ -73,7 +73,106 @@ _MAX_TEXT_CHARS = 2200
 _MAX_LINKS = 8
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
+# Stopwords used by the title-phrase relevance gate (EN, SW, FR).
+_STOPWORDS = {
+    "the", "a", "an", "of", "and", "or", "for", "in", "on", "at", "to",
+    "from", "with", "by", "is", "are", "was", "were", "it", "its", "this",
+    "that", "these", "those", "as", "be", "been", "being", "have", "has",
+    "had", "do", "does", "did", "but", "not", "no", "can", "could", "will",
+    "would", "should", "about", "over", "under", "between", "into", "out",
+    "up", "down", "off", "him", "her", "his", "their", "they", "them", "you",
+    "your", "my", "we", "our", "us", "i", "me", "he", "she",
+    "kwa", "na", "ya", "za", "wa", "ni", "si", "tu", "la", "li", "lo", "ku",
+    "katika", "kutoka", "juu", "chini", "hii", "hizo", "hapa", "kwenye",
+    "le", "la", "de", "du", "des", "un", "une", "et", "ou", "pour", "sur",
+    "dans", "avec", "par", "est", "sont", "ce", "cette", "ces", "les", "au",
+}
 _IDLE_REFRESH_SECONDS = 15  # wait/scroll window for Selenium pages
+
+# Search engines sometimes hand back URLs of their own landing pages
+# ("duckduckgo.com/N'Golo_Kanté" etc.), which are nav junk and never a
+# real source; deep-read skips them.
+_DOGFOOD_HOSTS = {
+    "duckduckgo.com", "www.duckduckgo.com", "duck.co", "lite.duckduckgo.com",
+    "www.bing.com", "bing.com",
+    "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be",
+    "facebook.com", "www.facebook.com", "twitter.com", "x.com",
+    "instagram.com", "www.instagram.com", "tiktok.com", "www.tiktok.com",
+    "mymemory.translated.net", "translate.google.com", "translate.yandex.com",
+    "wordhippo.com", "www.wordhippo.com",
+}
+
+# Distinctive Swahili / French clue words used by _guess_phrase_lang.
+_SW_CLUES = {
+    "kwa", "heri", "jina", "maana", "nini", "wapi", "lini", "nani", "hii",
+    "hizo", "katika", "kutoka", "juu", "chini", "kwaheri", "asante", "sema",
+    "kusema", "safari", "mzee", "mwalimu", "mwanafunzi", "shule", "nyumba",
+    "chakula", "maji", "bahari", "mlima", "nchi", "mjini", "dunia",
+    "chakula", "habari", "sasa", "bado", "lakini", "ndiyo", "hapana",
+    "rafiki", "familia", "mama", "baba", "watoto", "kaka", "dada",
+}
+_FR_CLUES = {
+    "le", "la", "les", "des", "un", "une", "du", "de", "et", "ou", "pour",
+    "sur", "dans", "avec", "par", "est", "sont", "a", "au", "aux", "ce",
+    "cette", "ces", "il", "elle", "nous", "vous", "ils", "elles", "pas",
+    "quoi", "comment", "pourquoi", "ou", "qui", "que", "bonjour", "merci",
+}
+
+# Hand-verified common phrases (lowercased query -> English translation)
+# so the trilingual bot answers everyday Swahili/French idioms correctly
+# instead of falling back to web-search noise.
+_TRANSLATIONS = {
+    "kwa heri": ("goodbye",),
+    "kwaheri": ("goodbye",),
+    "asante": ("thank you",),
+    "asante sana": ("thank you very much",),
+    "habari": ("news / hello",),
+    "habari yako": ("how are you?",),
+    "habari za asubuhi": ("good morning",),
+    "habari za jioni": ("good evening",),
+    "mambo": ("what's up",),
+    "poa": ("cool",),
+    "karibu": ("welcome",),
+    "karibu sana": ("you're welcome",),
+    "ndiyo": ("yes",),
+    "hapana": ("no",),
+    "sijui": ("i don't know",),
+    "ninafurahi kukusikia": ("nice to meet you",),
+    "usiku mwema": ("good night",),
+    "lala salama": ("sleep well",),
+    "jina lako ni nani": ("what is your name?",),
+    "nakupenda": ("i love you",),
+    "nimekuelewa": ("i understand you",),
+    "sielewi": ("i don't understand",),
+    "tafadhali": ("please",),
+    "samahani": ("sorry / excuse me",),
+    "naweza kusaidiaje": ("how can i help",),
+    "bonjour": ("hello",),
+    "bonsoir": ("good evening",),
+    "bonne nuit": ("good night",),
+    "merci": ("thank you",),
+    "merci beaucoup": ("thank you very much",),
+    "s'il vous plait": ("please",),
+    "au revoir": ("goodbye",),
+    "comment ca va": ("how are you",),
+    "comment-allez-vous": ("how are you",),
+    "je vous en prie": ("you're welcome",),
+    "de rien": ("you're welcome",),
+    "pardon": ("excuse me",),
+    "excusez-moi": ("excuse me",),
+    "bienvenue": ("welcome",),
+}
+
+
+def _guess_phrase_lang(phrase: str):
+    """Best-effort guess whether a phrase is Swahili or French, based
+    on distinctive clue words. Returns "sw", "fr", or None."""
+    words = set(re.split(r"\W+", phrase.lower()))
+    if words & _SW_CLUES:
+        return "sw"
+    if words & _FR_CLUES:
+        return "fr"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +256,26 @@ def _title_and_text(html: str):
         title = soup.title.get_text(strip=True) if soup.title else ""
         for tag in soup(["script", "style", "nav", "footer", "noscript"]):
             tag.decompose()
+        # Wikipedia-family pages bury the real content under navigation
+        # junk; drop the classic culprits (sidebars, jump links, footer,
+        # category lists, edit links) before extracting text.
+        for sel in ("#mw-navigation", "#mw-panel", ".vector-menu", "[role='navigation']",
+                    ".mw-jump-link", ".mw-portlet", "#catlinks", ".printfooter",
+                    ".noprint", ".sidebar", ".mw-editsection", ".mw-references-wrap",
+                    "#siteSub", ".mw-empty-elt", "#p-lang", ".vector-user-links",
+                    "#left-navigation", "#right-navigation", ".mw-body-header"):
+            for node in soup.select(sel):
+                node.decompose()
         text = _WS_RE.sub(" ", soup.get_text(" ", strip=True))
+        # Drop short boilerplate lines the page chrome leaves behind.
+        _BOILERPLATE = re.compile(
+            r"^(jump to content|search|edit links|from wikipedia, the free "
+            r"encyclopedia|hidden categories|page information|permalink|"
+            r"cite this page)$", re.IGNORECASE)
+        text = "\n".join(
+            ln for ln in re.split(r"(?<=[.!?;:])\s+", text)
+            if ln and not _BOILERPLATE.match(ln.strip()) and len(ln.strip()) > 1
+        )
         links = []
         for a in soup.find_all("a", href=True):
             href = a["href"].strip()
@@ -197,12 +315,17 @@ class WebReader:
     raises, exactly like the API connectors."""
 
     def __init__(self):
-        self.timeout_seconds = 10.0
+        self.timeout_seconds = 8.0
 
     # -- bs4 dependency story, exposed for commands that want it -------
     @staticmethod
     def bs4_available() -> bool:
         return BS4_AVAILABLE
+
+    @staticmethod
+    def _is_wiki_url(url: str) -> bool:
+        """True if the URL is a Wikipedia-family article page."""
+        return bool(re.match(r"https?://[a-z]{2,3}\.wikipedia\.org/wiki/.+", url))
 
     # -- main entry point ---------------------------------------------
 
@@ -226,25 +349,60 @@ class WebReader:
             result["links"] = [(label, href) for label, href in links[: _MAX_LINKS]]
         return result
 
-    # -- multi-engine lookup/search chain ------------------------------
+    # -- multi-engine, multi-language lookup/search chain ------------
     #
-    # A single topic can live in several places: simple English Wikipedia,
-    # the main English Wikipedia, or only on the wider web. _lookup_chain()
-    # walks those sources in order and returns the FIRST one that answers,
-    # so "search the web for alliance high school" still returns real
-    # results even when Wikipedia has no article for it. Every step stays
-    # fail-closed: a dead source is skipped, never fatal.
+    # A single topic can live in many places: simple English Wikipedia,
+    # the main English Wikipedia, the Swahili or French Wikipedia,
+    # Wiktionary (words), Wikiquote (people), or only on the wider web.
+    # lookup() walks those sources in order and returns the FIRST one
+    # that answers - and the web step still reads the top result's real
+    # content, not just its title, so "alliance high school" or a local
+    # club gets a genuinely deep answer instead of a dead end. Every
+    # step stays fail-closed: a dead source is skipped, never fatal.
+
+    _WIKI_HOSTS = {
+        "simple": "https://simple.wikipedia.org",
+        "en": "https://en.wikipedia.org",
+        "sw": "https://sw.wikipedia.org",
+        "fr": "https://fr.wikipedia.org",
+    }
+    _WIKI_LANGS = ("simple", "en", "sw", "fr")
+    _WIKIQUOTE_HOST = "https://en.wikiquote.org"
+    _WIKTIONARY_HOST = "https://en.wiktionary.org"
+
+    def _wiki_api(self, lang: str, params: dict):
+        """Calls a Wikipedia-family action API (en/sw/fr/simple, or
+        "quotes" for Wikiquote) with browser-grade UA. Returns a JSON
+        dict or an error dict."""
+        if lang == "quotes":
+            host = self._WIKIQUOTE_HOST
+        elif lang == "wiktionary":
+            host = self._WIKTIONARY_HOST
+        else:
+            host = self._WIKI_HOSTS.get(lang, self._WIKI_HOSTS["en"])
+        params = dict(params)
+        params.setdefault("format", "json")
+        params.setdefault("formatversion", "2")
+        url = host + "/w/api.php?" + urllib.parse.urlencode(params)
+        raw = _fetch_html_ua(url, timeout=self.timeout_seconds, headers=_WEB_UA)
+        if isinstance(raw, dict):
+            return {"error": raw["error"]}
+        try:
+            data = json.loads(_decode(raw))
+        except (json.JSONDecodeError, ValueError):
+            return {"error": "couldn't parse the result"}
+        return data if isinstance(data, dict) else {"error": "unexpected result"}
 
     def wikipedia_summary(self, query: str, lang: str = "simple"):
-        """Pulls a concise intro summary for a topic from Wikipedia's
-        REST endpoint (no API key). lang is "simple" or "en". Returns a
-        dict with {"title", "extract", "url"} or {"error": str}."""
+        """Concise intro summary from Wikipedia's REST endpoint (no API
+        key). lang is one of "simple", "en", "sw", "fr". Returns
+        {"title", "extract", "url", "source"} or {"error": str}."""
         topic = query.strip()
         if not topic:
             return {"error": "what should I look up?"}
-        host = "en.wikipedia.org" if lang == "en" else "simple.wikipedia.org"
+        host = self._WIKI_HOSTS.get(lang, self._WIKI_HOSTS["en"])
         api_url = (
-            f"https://{host}/api/rest_v1/page/summary/"
+            host + "/api/rest_v1/page/summary/"
             + urllib.parse.quote(topic.replace(" ", "_"))
         )
         raw = fetch_html(api_url, timeout=self.timeout_seconds)
@@ -257,61 +415,275 @@ class WebReader:
         if not isinstance(data, dict):
             return {"error": "unexpected lookup result"}
         if data.get("type") in ("disambiguation", "redirect") or not data.get("extract"):
-            # disambiguation or missing page: fall back to a title search
-            return self.wikipedia_search(topic)
+            # disambiguation or missing page: let the caller move on
+            return {"error": f"no article on {lang}.wikipedia for '{topic}'"}
         return {
             "title": data.get("title") or topic,
             "extract": _WS_RE.sub(" ", data.get("extract") or "").strip()[: _MAX_TEXT_CHARS],
             "url": data.get("content_urls", {}).get("desktop", {}).get("page") or api_url,
-            "source": "simple.wikipedia.org" if lang == "simple" else "en.wikipedia.org",
+            "source": f"{lang}.wikipedia.org",
         }
 
-    def _phase(self, query: str):
-        """Best-effort: asks Wikipedia's API for a matching page title
-        when a bare-summary request would 404 (e.g. a phrase Wikipedia
-        only knows under a slightly different name). Returns a dict with
-        {"title", "extract", "url"} or {"error": str}."""
-        titles = self.wikipedia_search(query)
-        if "error" in titles:
-            return titles
-        for item in titles["results"][:3]:
-            t = item["title"]
-            candidate = self.wikipedia_summary(t, lang="en")
-            if "error" not in candidate and candidate.get("extract"):
-                return candidate
-            # "Alliance High School (Kenya)" disambiguates back to the
-            # same page; strip the qualifier and retry once.
-            short = t.split(" (")[0]
-            if short != t:
-                candidate = self.wikipedia_summary(short, lang="en")
-                if "error" not in candidate and candidate.get("extract"):
-                    return candidate
-        return {"error": f"no Wikipedia article for '{query}'"}
-
-    def lookup(self, query: str):
-        """Multi-source lookup: simple WP -> main WP -> title-match ->
-        generic web search. Returns the FIRST source that answers."""
+    def wikipedia_extract(self, query: str, lang: str = "en", max_chars: int = 2500):
+        """DEEPER Wikipedia lookup than the REST summary: uses the
+        action=query prop=extracts endpoint to pull the full article
+        plaintext (capped for chat). Returns {"title", "extract", "url",
+        "source"} or {"error": str}."""
         topic = query.strip()
         if not topic:
             return {"error": "what should I look up?"}
-        # 1) simple English Wikipedia summary
-        first = self.wikipedia_summary(topic, lang="simple")
-        if "error" not in first and first.get("extract"):
-            return first
-        # 2) main English Wikipedia summary (same query, more coverage)
-        second = self.wikipedia_summary(topic, lang="en")
-        if "error" not in second and second.get("extract"):
-            return second
-        # 3) Wikipedia title search for a near-exact phrase match
-        phased = self._phase(topic)
-        if "error" not in phased:
-            return phased
-        # 4) last resort: a real web search so non-Wikipedia topics
-        #    ("alliance high school", a club, a local business) still get
-        #    an answer instead of a dead end.
-        web = self.web_search(topic)
+        data = self._wiki_api(lang, {
+            "action": "query", "prop": "extracts", "explaintext": "1",
+            "redirects": "1", "titles": topic,
+        })
+        if "error" in data:
+            return data
+        pages = data.get("query", {}).get("pages") or []
+        page = pages[0] if pages else {}
+        extract = page.get("extract") if isinstance(page, dict) else ""
+        if not extract:
+            return {"error": f"no deep Wikipedia article for '{topic}'"}
+        host = self._WIKI_HOSTS.get(lang, self._WIKI_HOSTS["en"])
+        title = page.get("title") or topic
+        return {
+            "title": title,
+            "extract": _WS_RE.sub(" ", extract).strip()[:max_chars],
+            "url": host + "/wiki/" + urllib.parse.quote(title.replace(" ", "_")),
+            "source": f"{lang}.wikipedia.org (full extract)",
+        }
+
+    def wiktionary_define(self, word: str):
+        """Dictionary definition from Wiktionary (part of the Wikimedia
+        family, no API key). Returns {"title", "extract", "url",
+        "source"} or {"error": str} - intended for single words."""
+        word = word.strip().lower()
+        if not word:
+            return {"error": "what word should I define?"}
+        data = self._wiki_api("wiktionary", {
+            "action": "query", "prop": "extracts", "explaintext": "1",
+            "exintro": "1", "titles": word,
+        })
+        if "error" in data:
+            return data
+        pages = data.get("query", {}).get("pages") or []
+        page = pages[0] if pages else {}
+        extract = page.get("extract") if isinstance(page, dict) else ""
+        if not extract:
+            return {"error": f"Wiktionary has no entry for '{word}'"}
+        return {
+            "title": page.get("title") or word,
+            "extract": _WS_RE.sub(" ", extract).strip()[: _MAX_TEXT_CHARS],
+            "url": "https://en.wiktionary.org/wiki/" + urllib.parse.quote(word.replace(" ", "_")),
+            "source": "Wiktionary",
+        }
+
+    def wikiquote(self, name: str):
+        """Famous-quotes profile from Wikiquote. Returns {"title",
+        "extract", "url", "source"} or {"error": str}."""
+        name = name.strip()
+        if not name:
+            return {"error": "who should I pull quotes for?"}
+        data = self._wiki_api("quotes", {
+            "action": "query", "prop": "extracts", "explaintext": "1",
+            "exintro": "1", "titles": name,
+        })
+        if "error" in data:
+            return data
+        pages = data.get("query", {}).get("pages") or []
+        page = pages[0] if pages else {}
+        extract = page.get("extract") if isinstance(page, dict) else ""
+        if not extract:
+            return {"error": f"Wikiquote has no profile for '{name}'"}
+        return {
+            "title": page.get("title") or name,
+            "extract": _WS_RE.sub(" ", extract).strip()[: _MAX_TEXT_CHARS],
+            "url": "https://en.wikiquote.org/wiki/" + urllib.parse.quote(name.replace(" ", "_")),
+            "source": "Wikiquote",
+        }
+
+    def _phase(self, query: str):
+        """Wikipedia title search for a near-exact phrase match, using
+        the full-text search API (better recall than opensearch). Only
+        results that actually share a meaningful token with the query
+        are trusted - full-text search loves returning unrelated pages
+        ('kwa heri' -> '63rd Locarno Film Festival'), which is worse
+        than no answer."""
+        tokens = set()
+        for tok in re.split(r"\W+", query.lower()):
+            if len(tok) > 1 and tok not in _STOPWORDS:
+                tokens.add(tok)
+        titles = self.wikipedia_search(query, limit=8)
+        if "error" in titles:
+            return titles
+        tried = set()
+        for item in titles["results"]:
+            title = item["title"]
+            for candidate in (title, title.split(" (")[0]):
+                if candidate.lower() in tried:
+                    continue
+                tried.add(candidate.lower())
+                if tokens:
+                    title_terms = {w for w in re.split(r"\W+", candidate.lower())
+                                   if len(w) > 1 and w not in _STOPWORDS}
+                    if not title_terms.intersection(tokens):
+                        # zero overlap = irrelevant page; skip it
+                        continue
+                cand = self.wikipedia_extract(candidate, lang="en")
+                if "error" not in cand:
+                    return cand
+        return {"error": f"no Wikipedia article for '{query}'"}
+
+    def lookup(self, query: str):
+        """Deep multi-source lookup. Walks, in order:
+          1. Wikipedia REST summaries - simple, en, sw, fr
+          2. Wikipedia full-extract (deep) - en, then sw for a
+             Swahili-sounding query
+          3. Wikipedia title search -> full extract of the match
+          4. Wiktionary (single words) and Wikiquote (people, bands)
+          5. Merged web search (DuckDuckGo + Bing)
+          6. Deep read: fetch the TOP web result and summarize it, so
+             even obscure local topics get real content.
+        Returns the FIRST source that answers. Always fail-closed."""
+        topic = query.strip()
+        if not topic:
+            return {"error": "what should I look up?"}
+
+        # Hard budget for the wiki-probing part of the chain: network
+        # throttling should degrade us to web search, never pile 10+
+        # timeouts onto one reply.
+        _start = time.monotonic()
+        _BUDGET = 20.0
+
+        def _out_of_budget() -> bool:
+            return time.monotonic() - _start > _BUDGET
+
+        # 1) Wikipedia REST summaries: probe simple + en IN PARALLEL (a slow
+        #    miss on one never blocks a fast hit - e.g. 'serendipity'),
+        #    and only reach for sw + fr if both missed. Two-at-a-time
+        #    keeps Wikipedia happy and throttling-free.
+        try:
+            import concurrent.futures as _cf
+            with _cf.ThreadPoolExecutor(max_workers=2) as pool:
+                for langs in ((self._WIKI_LANGS[0], self._WIKI_LANGS[1]),
+                              (self._WIKI_LANGS[2], self._WIKI_LANGS[3])):
+                    futures = {pool.submit(self.wikipedia_summary, topic, lang): lang
+                               for lang in langs}
+                    for fut in _cf.as_completed(futures):
+                        try:
+                            first = fut.result()
+                        except Exception:
+                            continue
+                        if "error" not in first and first.get("extract"):
+                            return first
+            # if all four probes missed but one looked "close", the phase
+            # search below still rescues via a loose title match.
+        except Exception:
+            # threads unavailable - fall back to sequential probing
+            for lang in self._WIKI_LANGS:
+                first = self.wikipedia_summary(topic, lang=lang)
+                if "error" not in first and first.get("extract"):
+                    return first
+
+        # 2) Wikipedia title search -> extract of the best match. This
+        #    is the reliable path for multi-word topics ('kikuyu town',
+        #    'alliance high school'); retry once against throttling.
+        if not _out_of_budget():
+            for attempt in (1, 2):
+                phased = self._phase(topic)
+                if "error" not in phased:
+                    return phased
+                if attempt == 1 and not _out_of_budget():
+                    time.sleep(0.6)
+                elif attempt == 1:
+                    break
+
+        # 3) Deep extracts (when the title search missed, e.g. the page
+        #    lives under a different exact title) - en, then sw.
+        if not _out_of_budget():
+            deep = self.wikipedia_extract(topic, lang="en")
+            if "error" not in deep:
+                return deep
+        if not _out_of_budget():
+            deep_sw = self.wikipedia_extract(topic, lang="sw")
+            if "error" not in deep_sw:
+                return deep_sw
+
+        # 4) Wiktionary first (single words AND common phrases, e.g.
+        #    "kwa heri" - both are real Wiktionary entries), then
+        #    Wikiquote for famous people.
+        if not _out_of_budget():
+            wikt = self.wiktionary_define(topic)
+            if "error" not in wikt:
+                return wikt
+        if not _out_of_budget():
+            quote = self.wikiquote(topic)
+            if "error" not in quote:
+                return quote
+
+        # 4b) Common Swahili / French phrases that aren't Wikipedia
+        #     subjects -> last-resort curated translation dictionary
+        #     (hand-verified, so the bot never confidently says
+        #     something wrong like "kwa heri is Swahili for 'To a gat'".
+        lang = _guess_phrase_lang(topic)
+        if lang:
+            key = topic.strip().lower()
+            trans = _TRANSLATIONS.get(key)
+            if trans:
+                return {
+                    "title": trans[0],
+                    "extract": (f"'{topic}' is {lang} for "
+                                f"'{trans[0]}'."),
+                    "url": "https://en.wiktionary.org",
+                    "source": "translation",
+                }
+
+        # 5) Wide web search (multiple engines, merged + deduped).
+        web = self.web_search(topic, limit=8)
         if "error" in web:
             return web
+
+        # 6) DEPTH: read the top result page itself - a real answer,
+        #    not just a headline. Wikipedia URLs get the clean extract
+        #    API treatment (their HTML is navigation-heavy); everything
+        #    else uses the plain-text reader. Scan up to four candidates
+        #    (search engines lead with their own redirect pages), but
+        #    never perform more than two real page reads.
+        #    Dogfood URLs from the search engines (DDG landing pages)
+        #    are never worth deep-reading.
+        reads_left = 2
+        for item in web["results"][:4]:
+            if reads_left <= 0:
+                break
+            url = item["url"]
+            host = (url.split("//", 1)[-1].split("/", 1)[0] if "//" in url else "").lower()
+            if host in _DOGFOOD_HOSTS:
+                continue
+            reads_left -= 1
+            if self._is_wiki_url(url):
+                m = re.match(r"https?://([a-z]+)\.wikipedia\.org/wiki/(.+)", url)
+                lang = m.group(1) if m else "en"
+                cand = self.wikipedia_extract(
+                    urllib.parse.unquote(m.group(2).replace("_", " ")) if m else url,
+                    lang=lang if lang in self._WIKI_LANGS else "en",
+                )
+                if "error" not in cand:
+                    return {
+                        "title": f"{cand['title']} ({url})",
+                        "extract": cand["extract"],
+                        "url": url,
+                        "urls": [r["url"] for r in web["results"]],
+                        "source": "web search (deep read)",
+                    }
+                continue
+            page = self.read_page(url)
+            if "error" not in page and page.get("summary"):
+                return {
+                    "title": f"{page['title']} ({url})",
+                    "extract": page["summary"],
+                    "url": url,
+                    "urls": [r["url"] for r in web["results"]],
+                    "source": "web search (deep read)",
+                }
         return {
             "title": f"Web results for '{topic}'",
             "extract": _WS_RE.sub(
@@ -324,20 +696,43 @@ class WebReader:
             "source": "web search",
         }
 
-    def web_search(self, query: str, limit: int = 6):
-        """Generic web search via DuckDuckGo - no API key, same urllib
-        transport. Tries the JSON Instant-Answer endpoint first (browser
-        UA, one retry), then falls back to parsing the lite HTML
-        endpoint, which is far more tolerant. Returns {"results":
-        [{"title", "snippet", "url"}, ...]} or {"error": str}."""
-        results = self._ddg_json(query, limit)
-        if results is None:
-            results = self._ddg_lite(query, limit)
-        if not results:
+    def web_search(self, query: str, limit: int = 8):
+        """Multi-engine web search: DuckDuckGo first (JSON then lite
+        HTML), Bing as a second engine, results merged + deduped by
+        URL. Returns {"results": [{"title", "snippet", "url"}, ...]}
+        or {"error": str}."""
+        all_results = []
+        for engine in (self._ddg_json, self._ddg_lite, self.bing_search):
+            try:
+                results = engine(query, limit)
+                if isinstance(results, list):
+                    all_results.extend(results)
+            except Exception:
+                continue
+            if len(all_results) >= limit:
+                break
+        deduped = []
+        seen = set()
+        for r in all_results:
+            url = r.get("url", "")
+            try:
+                key = urllib.parse.unquote(url).lower().split("&")[0].rstrip("/")
+            except Exception:
+                key = url.lower().split("&")[0].rstrip("/")
+            # note: the search engines' own landing pages are NOT dropped
+            # here - their snippets are still informative, and the deep-
+            # read step (which fetches a URL's body) skips them anyway.
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(r)
+            if len(deduped) >= limit:
+                break
+        if not deduped:
             return {"error": f"no web results for '{query}'"}
-        return {"results": results[:limit]}
+        return {"results": deduped}
 
-    def _ddg_json(self, query: str, limit: int = 6):
+    def _ddg_json(self, query: str, limit: int = 8):
         """DuckDuckGo Instant-Answer JSON API. Returns a results list,
         or None if the endpoint is throttling/challenging us."""
         url = (
@@ -386,7 +781,7 @@ class WebReader:
             return results or None
         return None
 
-    def _ddg_lite(self, query: str, limit: int = 6):
+    def _ddg_lite(self, query: str, limit: int = 8):
         """DuckDuckGo Lite HTML endpoint - plain result anchors, no JS.
         Works with or without bs4."""
         url = "https://lite.duckduckgo.com/lite/?q=" + urllib.parse.quote(query)
@@ -426,6 +821,41 @@ class WebReader:
                     break
         return results
 
+    def bing_search(self, query: str, limit: int = 8):
+        """Bing HTML search results (browser UA required). Returns a
+        results list (possibly empty) - used as a second engine."""
+        url = "https://www.bing.com/search?q=" + urllib.parse.quote(query) + "&count=20"
+        raw = _fetch_html_ua(url, timeout=self.timeout_seconds, headers=_WEB_UA)
+        if isinstance(raw, dict):
+            return []
+        html = _decode(raw)
+        results = []
+        if BS4_AVAILABLE:
+            soup = BeautifulSoup(html, "html.parser")
+            for li in soup.select("li.b_algo"):
+                a = li.select_one("h2 a")
+                if a is None:
+                    continue
+                href = a.get("href", "")
+                title = a.get_text(" ", strip=True)
+                p = li.select_one(".b_caption p") or li.select_one("p")
+                snippet = p.get_text(" ", strip=True) if p else ""
+                if href and title:
+                    results.append({"title": title[:80], "snippet": snippet, "url": href})
+                if len(results) >= limit:
+                    break
+        else:
+            for m in re.finditer(
+                r'<li class="b_algo".*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+                html, flags=re.I | re.S,
+            ):
+                title = _WS_RE.sub(" ", _HTML_TAG_RE.sub(" ", m.group(2))).strip()
+                if title and m.group(1).startswith("http"):
+                    results.append({"title": title[:80], "snippet": "", "url": m.group(1)})
+                if len(results) >= limit:
+                    break
+        return results
+
     @staticmethod
     def _clean_ddg_href(href: str) -> str:
         """DuckDuckGo wraps result URLs (/?uddg=<encoded> on html/lite);
@@ -437,27 +867,25 @@ class WebReader:
             return "https:" + href
         return href
 
-    def wikipedia_search(self, query: str):
-        """Returns a list of matching article titles + URLs from the
-        Wikipedia opensearch API, so a disambiguation result can still
-        tell the user what exists. Returns {"results": [...]} or
-        {"error": str}."""
-        api_url = (
-            "https://en.wikipedia.org/w/api.php?action=opensearch&format=json&limit=6&search="
-            + urllib.parse.quote(query)
-        )
-        raw = fetch_html(api_url, timeout=self.timeout_seconds)
-        if isinstance(raw, dict):
-            return {"error": f"couldn't search for that ({raw['error']})"}
-        try:
-            data = json.loads(_decode(raw))
-        except (json.JSONDecodeError, ValueError):
-            return {"error": "couldn't parse the search result"}
-        titles = data[1] if isinstance(data, list) and len(data) > 1 else []
-        urls = data[3] if isinstance(data, list) and len(data) > 3 else []
-        if not titles:
+    def wikipedia_search(self, query: str, limit: int = 6):
+        """Full-text Wikipedia title search (better recall than the old
+        opensearch prefix match). Returns {"results": [{"title":
+        "url"}...]} or {"error": str}."""
+        data = self._wiki_api("en", {
+            "action": "query", "list": "search", "srsearch": query,
+            "srlimit": str(limit),
+        })
+        if "error" in data:
+            return data
+        pages = data.get("query", {}).get("search") or []
+        if not pages:
             return {"error": f"no Wikipedia results for '{query}'"}
-        return {"results": [{"title": t, "url": u} for t, u in zip(titles, urls)]}
+        host = self._WIKI_HOSTS["en"]
+        return {"results": [
+            {"title": p.get("title", ""),
+             "url": host + "/wiki/" + urllib.parse.quote(p.get("title", "").replace(" ", "_"))}
+            for p in pages
+        ]}
 
     def format_read_page(self, url: str) -> str:
         """Human-friendly reply for the 'fetch/<url>' command."""
@@ -476,24 +904,22 @@ class WebReader:
 
     def format_lookup(self, query: str) -> str:
         """Human-friendly reply for the 'look up <topic>' command. Walks
-        the multi-source lookup chain (Wikipedia -> web search)."""
+        the deep multi-source lookup chain (Wikipedia in 4 languages,
+        full extracts, Wiktionary, Wikiquote, then merged web search
+        with a deep read of the top result)."""
         result = self.lookup(query)
         if "error" in result:
             # maybe no network or no article - say so gracefully
             return f"I couldn't find anything on '{query}': {result['error']}."
-        if result.get("source") == "web search":
-            lines = [f"**{result['title']}**"]
-            if result.get("extract"):
-                lines.append(result["extract"])
-            if result.get("urls"):
-                lines.append("")
-                lines.append("Sources:")
-                for u in result["urls"]:
-                    lines.append(f"- {u}")
-            return "\n".join(lines)
-        lines = [f"**{result['title']}** – from Wikipedia"]
+
+        lines = [f"**{result['title']}**"]
         if result.get("extract"):
             lines.append(result["extract"])
+        if result.get("urls"):
+            lines.append("")
+            lines.append("Sources:")
+            for u in result["urls"]:
+                lines.append(f"- {u}")
         lines.append(f"More: {result['url']}")
         return "\n".join(lines)
 

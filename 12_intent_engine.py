@@ -768,6 +768,17 @@ class TypoCorrector:
             "web", "website", "site", "internet", "wikipedia", "online",
             "mtandao", "intaneti", "kwenye", "serne", "cherche", "regarde",
             "ouvre", "liste", "page", "navigue", "tafuta", "fungua", "soma",
+            # common Swahili words (heri -> "here", jina -> "jane" etc.
+            # are the classic false corrections) so the lookup/topic
+            # never gets mangled by the English typo dictionary.
+            "heri", "jina", "maana", "mji", "nchi", "mwalimu", "nyumba",
+            "mgeni", "rafiki", "sauti", "habari", "asante", "sema", "kusema",
+            "kufanya", "kuwa", "ndiyo", "hapana", "mfano", "picha", "barua",
+            "shule", "daktari", "miti", "mbuzi", "ngombe", "kuku", "ndege",
+            "kitabu", "kalamu", "meza", "dirisha", "mlango", "bahari",
+            "mlima", "mto", "ziwa", "maji", "chakula", "maziwa", "mtoto",
+            "watoto", "baba", "mama", "dada", "kaka", "nani", "wapi", "lini",
+            "kwa", "na", "ya", "za", "wa", "ni", "si", "tu", "lakini",
         }
 
         # Efficiency: _correct_word() used to loop over ALL of

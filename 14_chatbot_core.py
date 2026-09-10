@@ -3133,11 +3133,18 @@ class ChatBot:
               "define: serendipity"       -> real dictionary lookup
 
             WEB LOOKUP & BROWSING (need internet; fail closed if offline)
-              "look up elephant"          -> Wikipedia summary (no API key);
-                                             falls back to a web search when
-                                             Wikipedia has no article (e.g.
-                                             local schools, clubs, products)
+              "look up elephant"          -> deep multi-source lookup (no API
+                                             keys): Wikipedia in 4 languages
+                                             (simple/en/sw/fr), full-article
+                                             extracts, Wiktionary (words),
+                                             Wikiquote (people), then a merged
+                                             DuckDuckGo + Bing web search that
+                                             deep-reads the top result page -
+                                             so local schools, clubs, products
+                                             and news all get real answers
               "search the web for ai"     -> same lookup, loose phrasing
+              "look up kwa heri"          -> Swahili/French phrases answered
+                                             via a hand-verified dictionary
               "read https://example.com"  -> fetch + summarize a page with
                                              BeautifulSoup (skips menus/nav)
               "screenshot https://example.com" -> headless-Chrome screenshot,
