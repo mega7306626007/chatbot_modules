@@ -3133,7 +3133,10 @@ class ChatBot:
               "define: serendipity"       -> real dictionary lookup
 
             WEB LOOKUP & BROWSING (need internet; fail closed if offline)
-              "look up elephant"          -> Wikipedia summary (no API key)
+              "look up elephant"          -> Wikipedia summary (no API key);
+                                             falls back to a web search when
+                                             Wikipedia has no article (e.g.
+                                             local schools, clubs, products)
               "search the web for ai"     -> same lookup, loose phrasing
               "read https://example.com"  -> fetch + summarize a page with
                                              BeautifulSoup (skips menus/nav)

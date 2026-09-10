@@ -57,6 +57,12 @@ except ImportError:
 
 _USER_AGENT = "Offline-ChatBot/1.0 (educational project; polite scraping with links & attribution)"
 
+# DuckDuckGo serves clean JSON to a browser-grade UA but often answers
+# its generic Python/bot headers with an "anomaly" challenge page, so
+# web_search uses this UA instead of the polite one above.
+_WEB_UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"}
+
 # Pages commonly block default Python user agents; this is still polite
 # (identifies itself, standard UA string for a headless client).
 _HEADERS = {"User-Agent": _USER_AGENT, "Accept-Language": "en,sw;q=0.8,fr;q=0.5"}
@@ -98,6 +104,35 @@ def fetch_html(url: str, timeout: float = 10.0, max_bytes: int = 3_000_000):
     except TimeoutError:
         return {"error": "that page took too long to respond"}
     except (ValueError, OSError) as e:  # bad scheme, refused, etc.
+        return {"error": f"couldn't fetch that page ({e})"}
+
+
+def _fetch_html_ua(url: str, timeout: float = 10.0, max_bytes: int = 3_000_000,
+                   headers=None):
+    """Like fetch_html but with caller-supplied User-Agent headers, in
+    case a service (DuckDuckGo) serves different content to its generic
+    bot UA vs. a browser-grade one. Same fail-closed contract."""
+    if "://" not in url:
+        url = "https://" + url
+    hdrs = dict(headers or {})
+    hdrs.setdefault("Accept-Language", "en,sw;q=0.8,fr;q=0.5")
+    try:
+        req = urllib.request.Request(url, headers=hdrs, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                return {"error": f"server returned HTTP {resp.status}"}
+            body = resp.read(max_bytes + 1)
+            if len(body) > max_bytes:
+                return {"error": "page is too large to fetch"}
+            return body
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}"}
+    except urllib.error.URLError as e:
+        reason = getattr(e, "reason", None)
+        return {"error": f"couldn't reach that page ({reason})"}
+    except TimeoutError:
+        return {"error": "that page took too long to respond"}
+    except (ValueError, OSError) as e:
         return {"error": f"couldn't fetch that page ({e})"}
 
 
@@ -191,15 +226,25 @@ class WebReader:
             result["links"] = [(label, href) for label, href in links[: _MAX_LINKS]]
         return result
 
-    def wikipedia_summary(self, query: str):
+    # -- multi-engine lookup/search chain ------------------------------
+    #
+    # A single topic can live in several places: simple English Wikipedia,
+    # the main English Wikipedia, or only on the wider web. _lookup_chain()
+    # walks those sources in order and returns the FIRST one that answers,
+    # so "search the web for alliance high school" still returns real
+    # results even when Wikipedia has no article for it. Every step stays
+    # fail-closed: a dead source is skipped, never fatal.
+
+    def wikipedia_summary(self, query: str, lang: str = "simple"):
         """Pulls a concise intro summary for a topic from Wikipedia's
-        simple REST endpoint (no API key). Returns a dict with
-        {"title", "extract", "url"} or {"error": str}."""
+        REST endpoint (no API key). lang is "simple" or "en". Returns a
+        dict with {"title", "extract", "url"} or {"error": str}."""
         topic = query.strip()
         if not topic:
             return {"error": "what should I look up?"}
+        host = "en.wikipedia.org" if lang == "en" else "simple.wikipedia.org"
         api_url = (
-            "https://simple.wikipedia.org/api/rest_v1/page/summary/"
+            f"https://{host}/api/rest_v1/page/summary/"
             + urllib.parse.quote(topic.replace(" ", "_"))
         )
         raw = fetch_html(api_url, timeout=self.timeout_seconds)
@@ -211,14 +256,186 @@ class WebReader:
             return {"error": "couldn't parse the lookup result"}
         if not isinstance(data, dict):
             return {"error": "unexpected lookup result"}
-        if data.get("type") in ("disambiguation", "redirect") or data.get("extract") is None:
-            # disambiguation page: fall back to a plain search over titles
+        if data.get("type") in ("disambiguation", "redirect") or not data.get("extract"):
+            # disambiguation or missing page: fall back to a title search
             return self.wikipedia_search(topic)
         return {
             "title": data.get("title") or topic,
             "extract": _WS_RE.sub(" ", data.get("extract") or "").strip()[: _MAX_TEXT_CHARS],
             "url": data.get("content_urls", {}).get("desktop", {}).get("page") or api_url,
+            "source": "simple.wikipedia.org" if lang == "simple" else "en.wikipedia.org",
         }
+
+    def _phase(self, query: str):
+        """Best-effort: asks Wikipedia's API for a matching page title
+        when a bare-summary request would 404 (e.g. a phrase Wikipedia
+        only knows under a slightly different name). Returns a dict with
+        {"title", "extract", "url"} or {"error": str}."""
+        titles = self.wikipedia_search(query)
+        if "error" in titles:
+            return titles
+        for item in titles["results"][:3]:
+            t = item["title"]
+            candidate = self.wikipedia_summary(t, lang="en")
+            if "error" not in candidate and candidate.get("extract"):
+                return candidate
+            # "Alliance High School (Kenya)" disambiguates back to the
+            # same page; strip the qualifier and retry once.
+            short = t.split(" (")[0]
+            if short != t:
+                candidate = self.wikipedia_summary(short, lang="en")
+                if "error" not in candidate and candidate.get("extract"):
+                    return candidate
+        return {"error": f"no Wikipedia article for '{query}'"}
+
+    def lookup(self, query: str):
+        """Multi-source lookup: simple WP -> main WP -> title-match ->
+        generic web search. Returns the FIRST source that answers."""
+        topic = query.strip()
+        if not topic:
+            return {"error": "what should I look up?"}
+        # 1) simple English Wikipedia summary
+        first = self.wikipedia_summary(topic, lang="simple")
+        if "error" not in first and first.get("extract"):
+            return first
+        # 2) main English Wikipedia summary (same query, more coverage)
+        second = self.wikipedia_summary(topic, lang="en")
+        if "error" not in second and second.get("extract"):
+            return second
+        # 3) Wikipedia title search for a near-exact phrase match
+        phased = self._phase(topic)
+        if "error" not in phased:
+            return phased
+        # 4) last resort: a real web search so non-Wikipedia topics
+        #    ("alliance high school", a club, a local business) still get
+        #    an answer instead of a dead end.
+        web = self.web_search(topic)
+        if "error" in web:
+            return web
+        return {
+            "title": f"Web results for '{topic}'",
+            "extract": _WS_RE.sub(
+                " ", " ".join(
+                    f"{r['title']}: {r['snippet']}" for r in web["results"]
+                )
+            ).strip()[: _MAX_TEXT_CHARS],
+            "url": web["results"][0]["url"],
+            "urls": [r["url"] for r in web["results"]],
+            "source": "web search",
+        }
+
+    def web_search(self, query: str, limit: int = 6):
+        """Generic web search via DuckDuckGo - no API key, same urllib
+        transport. Tries the JSON Instant-Answer endpoint first (browser
+        UA, one retry), then falls back to parsing the lite HTML
+        endpoint, which is far more tolerant. Returns {"results":
+        [{"title", "snippet", "url"}, ...]} or {"error": str}."""
+        results = self._ddg_json(query, limit)
+        if results is None:
+            results = self._ddg_lite(query, limit)
+        if not results:
+            return {"error": f"no web results for '{query}'"}
+        return {"results": results[:limit]}
+
+    def _ddg_json(self, query: str, limit: int = 6):
+        """DuckDuckGo Instant-Answer JSON API. Returns a results list,
+        or None if the endpoint is throttling/challenging us."""
+        url = (
+            "https://api.duckduckgo.com/?q=" + urllib.parse.quote(query)
+            + "&format=json&no_html=1"
+        )
+        for attempt in range(2):
+            raw = _fetch_html_ua(url, timeout=self.timeout_seconds, headers=_WEB_UA)
+            if isinstance(raw, dict):
+                return None
+            try:
+                data = json.loads(_decode(raw))
+            except (json.JSONDecodeError, ValueError):
+                # anomaly/challenge page, not JSON - try again once
+                continue
+            if not isinstance(data, dict):
+                return None
+            results = []
+            if data.get("AbstractText") and data.get("AbstractURL"):
+                results.append({
+                    "title": data.get("Heading") or query,
+                    "snippet": data.get("AbstractText"),
+                    "url": data.get("AbstractURL"),
+                })
+            related = data.get("RelatedTopics") or []
+            for topic in related:
+                if isinstance(topic, dict):
+                    if "Topics" in topic:
+                        for sub in topic["Topics"]:
+                            if isinstance(sub, dict) and sub.get("FirstURL"):
+                                text = sub.get("Text", "")
+                                results.append({
+                                    "title": text.split(" -")[0][:80] or text,
+                                    "snippet": text,
+                                    "url": sub.get("FirstURL"),
+                                })
+                    elif topic.get("FirstURL"):
+                        text = topic.get("Text", "")
+                        results.append({
+                            "title": text.split(" -")[0][:80] or text,
+                            "snippet": text,
+                            "url": topic.get("FirstURL"),
+                        })
+                if len(results) >= limit:
+                    break
+            return results or None
+        return None
+
+    def _ddg_lite(self, query: str, limit: int = 6):
+        """DuckDuckGo Lite HTML endpoint - plain result anchors, no JS.
+        Works with or without bs4."""
+        url = "https://lite.duckduckgo.com/lite/?q=" + urllib.parse.quote(query)
+        raw = _fetch_html_ua(url, timeout=self.timeout_seconds, headers=_WEB_UA)
+        if isinstance(raw, dict):
+            return []
+        html = _decode(raw)
+        results = []
+        if BS4_AVAILABLE:
+            soup = BeautifulSoup(html, "html.parser")
+            for a in soup.select("a.result-link"):
+                href = a.get("href", "")
+                label = a.get_text(" ", strip=True)
+                if not href or not label:
+                    continue
+                results.append({
+                    "title": label[:80],
+                    "snippet": "",
+                    "url": self._clean_ddg_href(href),
+                })
+                if len(results) >= limit:
+                    break
+        else:
+            for m in re.finditer(
+                r'<a[^>]*class="result-link"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+                html, flags=re.I | re.S,
+            ):
+                label = _WS_RE.sub(" ", _HTML_TAG_RE.sub(" ", m.group(2))).strip()
+                if not label:
+                    continue
+                results.append({
+                    "title": label[:80],
+                    "snippet": "",
+                    "url": self._clean_ddg_href(m.group(1)),
+                })
+                if len(results) >= limit:
+                    break
+        return results
+
+    @staticmethod
+    def _clean_ddg_href(href: str) -> str:
+        """DuckDuckGo wraps result URLs (/?uddg=<encoded> on html/lite);
+        unwrap to the real target, and drop the internal redirect."""
+        m = re.search(r"[?&]uddg=([^&]+)", href)
+        if m:
+            return urllib.parse.unquote(m.group(1))
+        if href.startswith("//"):
+            return "https:" + href
+        return href
 
     def wikipedia_search(self, query: str):
         """Returns a list of matching article titles + URLs from the
@@ -258,11 +475,22 @@ class WebReader:
         return "\n".join(lines)
 
     def format_lookup(self, query: str) -> str:
-        """Human-friendly reply for the 'look up <topic>' command."""
-        result = self.wikipedia_summary(query)
+        """Human-friendly reply for the 'look up <topic>' command. Walks
+        the multi-source lookup chain (Wikipedia -> web search)."""
+        result = self.lookup(query)
         if "error" in result:
             # maybe no network or no article - say so gracefully
             return f"I couldn't find anything on '{query}': {result['error']}."
+        if result.get("source") == "web search":
+            lines = [f"**{result['title']}**"]
+            if result.get("extract"):
+                lines.append(result["extract"])
+            if result.get("urls"):
+                lines.append("")
+                lines.append("Sources:")
+                for u in result["urls"]:
+                    lines.append(f"- {u}")
+            return "\n".join(lines)
         lines = [f"**{result['title']}** – from Wikipedia"]
         if result.get("extract"):
             lines.append(result["extract"])
@@ -273,7 +501,14 @@ class WebReader:
         """Human-friendly reply for the 'search <topic>' command."""
         result = self.wikipedia_search(query)
         if "error" in result:
-            return f"I couldn't search for '{query}': {result['error']}."
+            # Wikipedia has no article titles, but the wider web might.
+            web = self.web_search(query)
+            if "error" in web:
+                return f"I couldn't search for '{query}': {web['error']}."
+            lines = [f"Here's what I found on the web for '{query}':"]
+            for item in web["results"]:
+                lines.append(f"- {item['title']} -> {item['url']}")
+            return "\n".join(lines)
         lines = [f"Here's what I found for '{query}':"]
         for item in result["results"]:
             lines.append(f"- {item['title']} -> {item['url']}")
