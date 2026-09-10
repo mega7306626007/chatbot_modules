@@ -692,6 +692,1787 @@ _KENYA_COUNTIES = (
 _KENYA_COUNTIES_LOWER = {c.lower() for c in _KENYA_COUNTIES}
 
 
+# ---------------------------------------------------------------------------
+# Mega factbase: every county follows a structured profile so the same
+# facts (capital, county code, governor) and the generated per-county
+# entries never contradict each other. County code = position in the
+# official 2013 numbering (Mombasa 001 ... Nairobi 047).
+#
+#   key: (county_code, capital, region, notable_towns, note, governor)
+# ---------------------------------------------------------------------------
+_KENYA_COUNTY_PROFILES = {
+    "mombasa": (1, "Mombasa City", "Coast",
+                ("Mombasa", "Nyali", "Bamburi", "Likoni"),
+                "Kenya's historic port and old Swahili capital: Fort Jesus, the "
+                "Old Town, Diani-side beaches (across the ferry), and Mombasa "
+                "Marine National Park.",
+                "Abdullswamad Sheriff Nassir"),
+    "kwale": (2, "Kwale town", "Coast",
+              ("Diani", "Ukunda", "Kwale"),
+              "Coastal county south of Mombasa: Diani and Tiwi beaches, Shimba "
+              "Hills National Reserve (elephants, sable antelope) and the Digo "
+              "people.",
+              "Fatuma Achani"),
+    "kilifi": (3, "Kilifi town", "Coast",
+               ("Kilifi", "Malindi", "Watamu", "Mariakani"),
+              "Coastal county north of Mombasa: Mnarani and Gede ruins, the "
+              "UNESCO Kaya forests, Watamu Marine Park, Arabuko-Sokoke Forest "
+              "and the Malindi coast.",
+              "Gideon Mung'aro"),
+    "tana river": (4, "Hola", "Coast",
+                   ("Hola", "Garsen", "Ngao"),
+                   "Dry county along Kenya's longest river with Tana Delta "
+                   "floodplains, huge sisal estates and the Pokomo and Orma "
+                   "peoples.",
+                   "Dhadho Godhana"),
+    "lamu": (5, "Lamu town", "Coast",
+             ("Lamu", "Shela", "Manda", "Faza"),
+             "Island county on the north coast: Lamu Old Town and the Lamu "
+             "archipelago (UNESCO), dhow culture, Swahili architecture and the "
+             "Maulidi festival.",
+             "Issa Timamy"),
+    "taita-taveta": (6, "Voi", "Coast",
+                     ("Voi", "Taveta", "Wundanyi"),
+                     "County on the Tanzanian border that hosts most of Tsavo "
+                     "East and West national parks, the Taita Hills and "
+                     "saltlick/lake lodges around Taveta.",
+                     "Andrew Mwadime"),
+    "garissa": (7, "Garissa town", "North Eastern",
+                ("Garissa", "Ijara", "Bura"),
+                "County on the lower Tana River and the gateway to Kenya's "
+                "Somali-speaking north-east, built on riverine and pastoral "
+                "economies.",
+                "Nathif Jama"),
+    "wajir": (8, "Wajir town", "North Eastern",
+              ("Wajir", "Eldas", "Griftu"),
+              "Huge semi-arid county bordering Somalia, one of Kenya's largest "
+              "and sparsest; pastoralist heartland.",
+              "Ahmed Abdullahi"),
+    "mandera": (9, "Mandera town", "North Eastern",
+                ("Mandera", "Elwak", "Rhamu"),
+                "Kenya's northernmost county, the remote 'three-nation finger' "
+                "where Kenya, Ethiopia and Somalia meet.",
+                "Mohamed Adan Khalif"),
+    "marsabit": (10, "Marsabit town", "Eastern",
+                 ("Marsabit", "Moyale", "Solor"),
+                 "Counting in its misty volcanic mountains and the fossil-rich "
+                 "shores of Lake Turkana - part of the Cradle of Mankind.",
+                 "Mohamud Ali"),
+    "isiolo": (11, "Isiolo town", "Eastern",
+               ("Isiolo", "Garbatulla"),
+               "Gateway to northern Kenya on the LAPSSET corridor; Buffalo "
+               "Springs and Shaba reserves sit at its north end.",
+               "Abdi Guyo"),
+    "meru": (12, "Meru town", "Eastern",
+             ("Meru", "Maua", "Nkubu"),
+             "On the north-eastern slopes of Mount Kenya - tea, coffee and "
+             "miraa, plus Meru National Park and the Nyambene Hills.",
+             "Kawira Mwangaza"),
+    "tharaka-nithi": (13, "Kathwana", "Eastern",
+                      ("Chuka", "Kathwana", "Marimanti"),
+                      "Along the eastern flank of Mount Kenya - tea, coffee and "
+                      "the Chuka and Mwimbi peoples; HQ Kathwana.",
+                      "Muthomi Njuki"),
+    "embu": (14, "Embu town", "Eastern",
+             ("Embu", "Runyenjes"),
+             "Arable county on Mount Kenya's southern slopes - coffee, tea, "
+             "miraa and the Mwea rice scheme.",
+             "Cecily Mbarire"),
+    "kitui": (15, "Kitui town", "Eastern",
+              ("Kitui", "Mwingi"),
+              "Large semi-arid county east of Nairobi - baobab trees, Mwingi "
+              "town and recent gold-mining finds.",
+              "Julius Malombe"),
+    "machakos": (16, "Machakos town", "Eastern",
+                 ("Machakos", "Kangundo", "Mavoko"),
+                 "Fast-growing county south-east of Nairobi - the Machakos "
+                 "Hills, the first colonial capital, and booming satellite "
+                 "towns like Athi River (Mavoko).",
+                 "Wavinya Ndeti"),
+    "makueni": (17, "Wote", "Eastern",
+                ("Wote", "Makueni", "Kibwezi"),
+                "Agro-pastoral county in Ukambani - honey, mangoes and macadamia "
+                "around Wote and the Kibwezi highlands.",
+                "Mutula Kilonzo Jr"),
+    "nyandarua": (18, "Ol Kalou", "Central",
+                  ("Ol Kalou", "Nyahururu", "Mipango"),
+                  "Cool highland county on the Aberdare Range - potatoes, dairy "
+                  "and the old 'Happy Valley' around Nyeri's doorstep.",
+                  "Moses Badilisha Kiarie"),
+    "nyeri": (19, "Nyeri town", "Central",
+              ("Nyeri", "Othaya", "Karatina"),
+              "At the foot of Mount Kenya - the Aberdares, coffee, and the "
+              "final resting place of Jomo Kenyatta and Dedan Kimathi; "
+              "gateway to the mountain.",
+              "Mutahi Kahiga"),
+    "kirinyaga": (20, "Kerugoya (Kutus)", "Central",
+                  ("Kerugoya", "Kutus", "Sagana"),
+                  "Compact Mount Kenya county - Mwea rice, tea, and the home "
+                  "county of President Mwai Kibaki.",
+                  "Anne Waiguru"),
+    "murang'a": (21, "Murang'a town", "Central",
+                 ("Murang'a", "Kangema", "Maragua"),
+                 "On Mount Kenya's slopes - tea, coffee and avocado country, "
+                 "and a historic centre of Gikuyu migration.",
+                 "Irungu Kang'ata"),
+    "kiambu": (22, "Kiambu town", "Central",
+               ("Kiambu", "Ruiru", "Limuru", "Gatundu"),
+               "Dynamic county just north of Nairobi - Thika Road industries, "
+               "Ruiru university town, Limuru tea and Gatundu, home of the "
+               "Kenyattas.",
+               "Kimani Wamatangi"),
+    "turkana": (23, "Lodwar", "Rift Valley",
+                ("Lodwar", "Kakuma", "Loiyangalani"),
+                "Kenya's second-largest county - the Jade Sea (Lake Turkana), "
+                "desert, the Turkana people, Kakuma refugee camp and "
+                "Loiyangalani's wind power.",
+                "Jeremiah Lomorukai"),
+    "west pokot": (24, "Kapenguria", "Rift Valley",
+                   ("Kapenguria", "Chepareria"),
+                   "Rugged county on the Uganda border - the Kapenguria trial "
+                   "of the Kapenguria Six, Pokot highlands and the Wei Wei "
+                   "valley.",
+                   "Simon Kachapin"),
+    "samburu": (25, "Maralal", "Rift Valley",
+                ("Maralal", "Archers Post", "Baragoi"),
+                "Semi-arid county north of Mount Kenya - Samburu National "
+                "Reserve's 'special five', the Ewaso Ng'iro and Maralal town.",
+                "Jonathan Lati Lelelit"),
+    "trans nzoia": (26, "Kitale", "Rift Valley",
+                    ("Kitale", "Kiminini"),
+                    "Arable 'granary' county - Kitale, the maize belt, the "
+                    "Suam/Tororo border gate and the foothills of Mount Elgon.",
+                    "George Natembeya"),
+    "uasin gishu": (27, "Eldoret", "Rift Valley",
+                    ("Eldoret", "Turbo", "Moiben"),
+                    "North Rift highland 'home of champions' - Eldoret, "
+                    "long-distance running legends, dairying and an "
+                    "international airport.",
+                    "Jonathan Bii"),
+    "elgeyo-marakwet": (28, "Iten", "Rift Valley",
+                        ("Iten", "Tambach", "Kapsowar"),
+                        "The Kerio valley escarpment county - Iten, the "
+                        "world-famous training town of steeplechase champions, "
+                        "Cherangany hills and the Rimoi reserve.",
+                        "Wesley Rotich"),
+    "nandi": (29, "Kapsabet", "Rift Valley",
+              ("Kapsabet", "Nandi Hills", "Mosoriot"),
+              "North Rift county of forests and tea - Kapsabet, Nandi Hills "
+              "and the homeland of Kipchoge Keino's running heritage.",
+              "Stephen Sang"),
+    "baringo": (30, "Kabarnet", "Rift Valley",
+                ("Kabarnet", "Marigat", "Eldama Ravine"),
+                "Rift Valley county around Lakes Baringo and Bogoria - "
+                "flamingos, hot springs, Tugen hills and the home turf of "
+                "Daniel arap Moi.",
+                "Benjamin Cheboi"),
+    "laikipia": (31, "Nanyuki", "Rift Valley",
+                 ("Nanyuki", "Rumuruti", "Ngarua"),
+                 "The Laikipia Plateau - Nanyuki at Mount Kenya's foot, big "
+                 "game conservancies (Ol Pejeta, Lewa) and ranching.",
+                 "Joshua Irungu"),
+    "nakuru": (32, "Nakuru town", "Rift Valley",
+               ("Nakuru", "Naivasha", "Molo", "Gilgil"),
+               "Rift Valley hub - Lake Nakuru's flamingos, Naivasha's flower "
+               "farms, the Menengai Crater and the Great Rift escarpment "
+               "views.",
+               "Susan Kihika"),
+    "narok": (33, "Narok town", "Rift Valley",
+              ("Narok", "Kilgoris", "Mai Mahiu"),
+              "The Maasai county of the Mara - Maasai Mara National Reserve, "
+              "the annual wildebeest migration and Maasai culture.",
+              "Patrick Ntutu"),
+    "kajiado": (34, "Kajiado town", "Rift Valley",
+                ("Kajiado", "Kitengela", "Namanga", "Ngong"),
+                "Maasai county south of Nairobi - Amboseli below Kilimanjaro, "
+                "the Namanga border post, Kitengela sprawl and Lake Magadi's "
+                "soda flats.",
+                "Joseph Ole Lenku"),
+    "kericho": (35, "Kericho town", "Rift Valley",
+                ("Kericho", "Litein", "Londiani"),
+                "Kenya's tea heartland - vast tawny estates roll across these "
+                "highlands, the source of a large share of the world's black "
+                "tea.",
+                "Erick Mutai Kipkoech"),
+    "bomet": (36, "Bomet town", "Rift Valley",
+              ("Bomet", "Sotik", "Longisa"),
+              "South Rift highland county - tea, pyrethrum and Kipsigis "
+              "heartland around Bomet and Sotik.",
+              "Hillary Barchok"),
+    "kakamega": (37, "Kakamega town", "Western",
+                 ("Kakamega", "Mumias", "Butere"),
+                 "Western county of the Luhya peoples - the beautiful Kakamega "
+                 "Forest (Kenya's last tropical rainforest), sugar belt and "
+                 "Mumias.",
+                 "Fernandes Barasa"),
+    "vihiga": (38, "Vihiga (Mbale)", "Western",
+               ("Mbale", "Vihiga", "Maji Mazuri"),
+               "Tiny, densely populated western county - rolling Maragoli "
+               "hills, tea and a famously educated population.",
+               "Wilber Ottichilo"),
+    "bungoma": (39, "Bungoma town", "Western",
+                ("Bungoma", "Webuye", "Kimilili"),
+                "Western county on Uganda's doorstep - Bukusu heartland, the "
+                "Webuye paper/sugar mills and Mount Elgon's slopes.",
+                "Kenneth Lusaka"),
+    "busia": (40, "Busia town", "Western",
+              ("Busia", "Malaba", "Nambale"),
+              "Border county - the busy Busia and Malaba crossings into "
+              "Uganda, Lake Victoria's shores and cross-border trade.",
+              "Paul Otuoma"),
+    "siaya": (41, "Siaya town", "Nyanza",
+              ("Siaya", "Bondo", "Ugenya"),
+              "Luo heartland on Lake Victoria - the home counties of Jaramogi "
+              "Oginga Odinga and Raila Odinga.",
+              "James Orengo"),
+    "kisumu": (42, "Kisumu city", "Nyanza",
+               ("Kisumu", "Ahero", "Muhoroni"),
+               "Lakeside commercial hub - Kisumu city and port on Lake "
+               "Victoria, the Dunga boardwalk, and Nyanza's rice and sugar "
+               "lands.",
+               "Anyang' Nyong'o"),
+    "homa bay": (43, "Homa Bay town", "Nyanza",
+                 ("Homa Bay", "Mbita", "Oyugis"),
+                 "Around the great bay of Lake Victoria - Mbita, Ruma National "
+                 "Park, Rusinga Island and the airlift-era home of Tom Mboya.",
+                 "Gladys Wanga"),
+    "migori": (44, "Migori town", "Nyanza",
+               ("Migori", "Isebania", "Kehancha"),
+               "South-western county bordering Tanzania - the Isebania border, "
+               "sugarcane and the Kisii-Kuria lands.",
+               "Ochillo Ayacko"),
+    "kisii": (45, "Kisii town", "Nyanza",
+              ("Kisii", "Tabaka", "Suneka"),
+              "Highland Abagusii county - bananas, tea and the soapstone "
+              "carving town of Tabaka.",
+              "Simba Arati"),
+    "nyamira": (46, "Nyamira town", "Nyanza",
+                ("Nyamira", "Keroka"),
+                "Small, fertile highland county in Gusiiland - tea, bananas "
+                "and dramatic green ridges.",
+                "Amos Nyaribo"),
+    "nairobi": (47, "Nairobi city", "Nairobi",
+                ("Nairobi", "Karen", "Lang'ata", "Eastleigh"),
+                "Kenya's capital county - the only county that is also a city, "
+                "hosting the CBD, JKIA, Nairobi National Park and Africa's "
+                "major UN hub.",
+                "Johnson Sakaja"),
+}
+
+
+def _mk_county_fact(name, code, capital, region, towns, note, governor):
+    """Builds a factbase entry for one county from its structured
+    profile, so the county list, the capital/governor mini-question
+    answers and the plain lookups never disagree."""
+    town_line = "".join(f" {t}," for t in towns).rstrip(",")
+    gov_line = f" Governor (2022 election): {governor}." if governor else ""
+    return {
+        "extract": (
+            f"{capital.capitalize()} is the capital of {name} County "
+            f"(county code {code:03d}, {region} Kenya).{gov_line}"
+            f" Notable places: {town_line}. {note}"
+        ),
+        "url": ("https://en.wikipedia.org/wiki/"
+                + urllib.parse.quote(f"{name} County".replace("\\_", "_"))),
+    }
+
+
+for _cname, (_code, _cap, _reg, _towns, _note, _gov) in _KENYA_COUNTY_PROFILES.items():
+    _KENYA_FACTS[_cname] = _mk_county_fact(
+        _cname, _code, _cap, _reg, _towns, _note, _gov)
+    # the county name doubles as an alias for its own entry
+    _CANONICAL_FACT_ALIASES.setdefault(_cname, _cname)
+    _pos_top = [t.lower() for t in _towns]
+    for _t in _pos_top:
+        # town -> its county, but never overwrite a real standalone
+        # entry or a more specific alias already in place.
+        if _t not in _KENYA_FACTS and _t not in _KENYA_COUNTIES_LOWER:
+            _CANONICAL_FACT_ALIASES.setdefault(_t, _cname)
+
+# The county alphabet itself has no standalone entry; point its name at
+# the profile, and keep the old self-alias harmless.
+for _cnt in _KENYA_COUNTIES_LOWER:
+    if _cnt not in _KENYA_FACTS:
+        _CANONICAL_FACT_ALIASES[_cnt] = _cnt
+
+# Distinct capital towns of counties that don't share their county name.
+_CAPITAL_ALIASES = {
+    "kitale": "trans nzoia", "kapenguria": "west pokot",
+    "iten": "elgeyo-marakwet", "kabarnet": "baringo",
+    "kapsabet": "nandi", "kathwana": "tharaka-nithi",
+    "voi": "taita-taveta", "hola": "tana river",
+    "kerugoya": "kirinyaga", "kutus": "kirinyaga",
+    "rumuruti": "laikipia", "mbale": "vihiga",
+    "lodwar": "turkana", "maralal": "samburu",
+    "ol kalou": "nyandarua", "wote": "makueni",
+    "eldoret town": "uasin gishu",
+}
+_CANONICAL_FACT_ALIASES.update(_CAPITAL_ALIASES)
+
+# Reverse town -> county index for the 'which/where is X' Q&A: every
+# town AND capital named in a county profile maps to that county, so
+# answers like "where is nanyuki" work even when the town has no
+# factbase entry of its own.
+_TOWN_INDEX = {}
+for _cname, (_code, _cap, _reg, _towns, _note, _gov) in _KENYA_COUNTY_PROFILES.items():
+    for _t in list(_towns) + [_cap]:
+        _TOWN_INDEX.setdefault(str(_t).lower(), _cname)
+
+
+# ---------------------------------------------------------------------------
+# The rest of the mega factbase, in themed blocks.
+# ---------------------------------------------------------------------------
+_EXTRA_KENYA_FACTS = {
+    # -- national symbols ----------------------------------------------------
+    "kenya flag": {
+        "extract": "Kenya's flag (adopted 1963) has black (the people), red "
+                   "(the blood of independence), and green (the land and "
+                   "agriculture) horizontal stripes with white fimbriations "
+                   "(peace and unity), centred on a Maasai shield with crossed "
+                   "spears.",
+        "url": "https://en.wikipedia.org/wiki/Flag_of_Kenya",
+    },
+    "kenya anthem": {
+        "extract": "Kenya's national anthem, 'Ee Mungu Nguvu Yetu' (Oh God of "
+                   "All Creation), was composed by a Kenyan team in Swahili and "
+                   "adopted at independence in 1963 - one of the first national "
+                   "anthems to be specially commissioned rather than borrowed.",
+        "url": "https://en.wikipedia.org/wiki/National_anthem_of_Kenya",
+    },
+    "motto of kenya": {
+        "extract": "Kenya's national motto is 'Harambee' - Swahili for 'let's "
+                   "all pull together' - adopted as the rallying idea of "
+                   "nation-building in 1963.",
+        "url": "https://en.wikipedia.org/wiki/Harambee",
+    },
+    "harambee": {
+        "extract": "Harambee (Swahili: 'all pull together') is Kenya's motto "
+                   "and a self-help tradition where communities pool labour "
+                   "and money for schools, clinics, harambee projects and "
+                   "fundraisers.",
+        "url": "https://en.wikipedia.org/wiki/Harambee",
+    },
+    "kenya independence": {
+        "extract": "Kenya became independent on 12 December 1963 (now Jamhuri "
+                   "Day, the national holiday) and a republic on 12 December "
+                   "1964 under first President Jomo Kenyatta. Madaraka Day on "
+                   "1 June remembers internal self-rule from 1963.",
+        "url": "https://en.wikipedia.org/wiki/Jamhuri_Day",
+    },
+    "mau mau": {
+        "extract": "The Mau Mau uprising (1952-1960) was Kenya's armed "
+                   "resistance to British colonial rule, strongest in the "
+                   "Central Highlands and Aberdares. It forced the "
+                   "independence negotiations and is remembered through its "
+                   "leader Dedan Kimathi and the detainees of Kapenguria and "
+                   "Manyani.",
+        "url": "https://en.wikipedia.org/wiki/Mau_Mau_uprising",
+    },
+    "swahili coast": {
+        "extract": "The Swahili Coast has traded across the Indian Ocean for "
+                   "over a thousand years - city-states like Mombasa, Malindi, "
+                   "Pate and Lamu knitted African, Arab, Persian and Indian "
+                   "influences into the Swahili language and culture, distinct "
+                   "from the inland world.",
+        "url": "https://en.wikipedia.org/wiki/Swahili_coast",
+    },
+    "fort jesus": {
+        "extract": "Fort Jesus in Mombasa, built by the Portuguese in 1593, is "
+                   "a UNESCO World Heritage Site and Kenya's most famous "
+                   "historical landmark, guarding the old harbour through "
+                   "centuries of Omani and British rule.",
+        "url": "https://en.wikipedia.org/wiki/Fort_Jesus",
+    },
+    "gede ruins": {
+        "extract": "The Gede Ruins near Malindi are the remains of a wealthy "
+                   "13th-century Swahili town abandoned in the 17th century - "
+                   "stone houses, a mosque and palace within a giant coconut "
+                   "and baobab forest.",
+        "url": "https://en.wikipedia.org/wiki/Gede,_Kenya",
+    },
+    "thimlich ohinga": {
+        "extract": "Thimlich Ohinga in Migori County is a dry-stone-walled "
+                   "settlement (the name means 'frightening dense forest' in "
+                   "Dholuo), built from around the 16th century and now a "
+                   "UNESCO World Heritage Site.",
+        "url": "https://en.wikipedia.org/wiki/Thimlich_Ohinga",
+    },
+    "koobi fora": {
+        "extract": "Koobi Fora on the eastern shore of Lake Turkana is one of "
+                   "the world's richest fossil sites of early human ancestors - "
+                   "part of Kenya's 'Cradle of Mankind' along with tools "
+                   "hundreds of thousands of years old.",
+        "url": "https://en.wikipedia.org/wiki/Koobi_Fora",
+    },
+    "national museum of kenya": {
+        "extract": "The Nairobi National Museum tells East Africa's natural and "
+                   "human story in one building - the Turkana Boy and "
+                   "human-origins galleries, the Great Rift Valley geology and "
+                   "bird collections - beside the Snake Park, with the Karen "
+                   "Blixen, Railway and Olorgesailie museums nearby.",
+        "url": "https://en.wikipedia.org/wiki/Nairobi_National_Museum",
+    },
+    # -- geography: mountains, rivers, lakes --------------------------------
+    "aberdare range": {
+        "extract": "The Aberdare Range is a volcanic highland 'spine' north of "
+                   "Nairobi - moorland, bamboo forest, waterfalls and the "
+                   "Aberdare National Park, home to bongo antelope, with "
+                   "peaks (Satima, 4,001 m) catching both Mount Kenya's and "
+                   "the Rift's rain.",
+        "url": "https://en.wikipedia.org/wiki/Aberdare_Range",
+    },
+    "mount longonot": {
+        "extract": "Mount Longonot is a stratovolcano just off the Nairobi-"
+                   "Naivasha highway (2,776 m) whose crater rim is a perfect "
+                   "hiking loop - a striking landmark of the Rift floor.",
+        "url": "https://en.wikipedia.org/wiki/Mount_Longonot",
+    },
+    "menengai crater": {
+        "extract": "The Menengai Crater near Nakuru is one of the world's "
+                   "largest volcanic calderas and the site of Kenya's "
+                   "Menengai geothermal power project.",
+        "url": "https://en.wikipedia.org/wiki/Menengai_Crater",
+    },
+    "athi river": {
+        "extract": "The Athi River (called the Galana in its lower course) "
+                   "drains south-eastern Kenya from the Aberdares through "
+                   "Machakos, Tsavo and to the Indian Ocean near Malindi.",
+        "url": "https://en.wikipedia.org/wiki/Athi-Galana-Sabaki_River",
+    },
+    "ewaso ng'iro": {
+        "extract": "The Ewaso Ng'iro river begins on the Leiria and Aberdare "
+                   "highlands and runs north-east across Samburu and Isiolo to "
+                   "the Lorian Swamp - the lifeline of Samburu's wildlife.",
+        "url": "https://en.wikipedia.org/wiki/Ewaso_Ng%27iro",
+    },
+    "nzoia river": {
+        "extract": "The Nzoia River drains the North Rift and Mount Elgon "
+                   "highlands westwards through Trans Nzoia and Busia into Lake "
+                   "Victoria - the lake's largest Kenyan tributary.",
+        "url": "https://en.wikipedia.org/wiki/Nzoia_River",
+    },
+    "kerio river": {
+        "extract": "The Kerio River runs down the dramatic Kerio Valley "
+                   "between the Elgeyo escarpment and the Tugen hills into "
+                   "Lake Turkana.",
+        "url": "https://en.wikipedia.org/wiki/Kerio_River",
+    },
+    "yala delta": {
+        "extract": "The Yala River's swamp on Lake Victoria's north shore is "
+                   "Kenya's largest wetland - a Ramsar site of papyrus, "
+                   "hippos and one of Africa's biggest heronries.",
+        "url": "https://en.wikipedia.org/wiki/Yala_Swamp",
+    },
+    "lake chala": {
+        "extract": "Lake Chala is a crater lake on the Kenya-Tanzania border "
+                   "at the foot of Kilimanjaro, ringed by sheer cliffs and "
+                   "fed by the mountain's underground springs.",
+        "url": "https://en.wikipedia.org/wiki/Lake_Chala",
+    },
+    "lake jipe": {
+        "extract": "Lake Jipe straddles the Kenya-Tanzania border at the foot "
+                   "of the North Pare Mountains, a shallow wetland with "
+                   "hippos, birds and a papyrus fringe near Taveta.",
+        "url": "https://en.wikipedia.org/wiki/Lake_Jipe",
+    },
+    # -- parks & reserves beyond the headliners ------------------------------
+    "meru national park": {
+        "extract": "Meru National Park, made famous by Joy Adamson's 'Born "
+                   "Free' lioness Elsa, covers savanna, the Tana and Rojeweru "
+                   "rivers and the Nyambene foothills with elephants, lions "
+                   "and leopards.",
+        "url": "https://en.wikipedia.org/wiki/Meru_National_Park",
+    },
+    "shimba hills": {
+        "extract": "Shimba Hills National Reserve above the Kwale coast has "
+                   "sable and roan antelope and elephants, with the Sheldrick "
+                   "Falls and one of the country's largest coastal forests.",
+        "url": "https://en.wikipedia.org/wiki/Shimba_Hills_National_Reserve",
+    },
+    "arabuko-sokoke": {
+        "extract": "Arabuko-Sokoke Forest, Kenya's largest intact coastal "
+                   "forest near Watamu, shelters the endangered Sokoke scops "
+                   "owl and golden-rumped elephant shrew and dozens of endemic "
+                   "species.",
+        "url": "https://en.wikipedia.org/wiki/Arabuko-Sokoke_Forest",
+    },
+    "saiwa swamp": {
+        "extract": "Saiwa Swamp National Reserve in Trans Nzoia protects the "
+                   "endangered Sitatunga antelope and De Brazza's monkey in "
+                   "Kenya's only swamp national park.",
+        "url": "https://en.wikipedia.org/wiki/Saiwa_Swamp_National_Reserve",
+    },
+    "ruma national park": {
+        "extract": "Ruma National Park in Homa Bay County is Kenya's only "
+                   "home of the roan antelope and a refuge for the rare blue "
+                   "swallow, along the Lambwe valley.",
+        "url": "https://en.wikipedia.org/wiki/Ruma_National_Park",
+    },
+    "ol pejeta": {
+        "extract": "Ol Pejeta Conservancy in Laikipia is East Africa's largest "
+                   "black rhino sanctuary and the last home of Najin and Fatu, "
+                   "the world's final two northern white rhinos, plus a "
+                   "chimpanzee sanctuary.",
+        "url": "https://en.wikipedia.org/wiki/Ol_Pejeta_Conservancy",
+    },
+    "lewa conservancy": {
+        "extract": "Lewa Wildlife Conservancy in Laikipia - a private rhino, "
+                   "elephant and Grevy's zebra reserve and a UNESCO World "
+                   "Heritage Site, known for its annual marathon.",
+        "url": "https://en.wikipedia.org/wiki/Lewa_Wildlife_Conservancy",
+    },
+    "chyulu hills": {
+        "extract": "The Chyulu Hills are Kenya's youngest volcanic range "
+                   "(about 10,000 years old), a green spine of lava country "
+                   "between Amboseli and Tsavo with caves like the Leviathan.",
+        "url": "https://en.wikipedia.org/wiki/Chyulu_Hills",
+    },
+    "buffalo springs": {
+        "extract": "Buffalo Springs National Reserve in Isiolo, along the "
+                   "Ewaso Ng'iro, is famous for its wildlife, springs and the "
+                   "view of Mount Kenya - often counted with Shaba and "
+                   "Samburu.",
+        "url": "https://en.wikipedia.org/wiki/Buffalo_Springs_National_Reserve",
+    },
+    "shaba reserve": {
+        "extract": "Shaba National Reserve in Isiolo (of Joy and George "
+                   "Adamson's lioness fame) is a dry savanna reserve along the "
+                   "Ewaso Ng'iro with gerenuk, Grevy's zebra and golden caves.",
+        "url": "https://en.wikipedia.org/wiki/Shaba_National_Reserve",
+    },
+    # -- people and ethnic groups ---------------------------------------------
+    "kikuyu": {
+        "extract": "The Kikuyu (Agikuyu) are Kenya's largest ethnic group, "
+                   "traditionally farming the fertile Central Highlands "
+                   "north of Nairobi. Their oral tradition places origin at "
+                   "Mount Kenya; many of Kenya's political and business "
+                   "elites, and the Kenyatta family, are Kikuyu.",
+        "url": "https://en.wikipedia.org/wiki/Kikuyu_people",
+    },
+    "luhya": {
+        "extract": "The Luhya (Luyia) of western Kenya are the second-largest "
+                   "ethnic group, a family of Bantu-speaking sub-tribes "
+                   "(Bukusu, Maragoli, Wanga...) numbering millions across "
+                   "Kakamega, Vihiga, Bungoma and Busia counties.",
+        "url": "https://en.wikipedia.org/wiki/Luhya_people",
+    },
+    "kalenjin": {
+        "extract": "The Kalenjin are a group of Highland Nilotic peoples "
+                   "(Nandi, Kipsigis, Tugen, Keiyo, Pokot...) of the Rift "
+                   "Valley, world-famous for long-distance running and the "
+                   "homeland of Presidents Moi and Ruto.",
+        "url": "https://en.wikipedia.org/wiki/Kalenjin_people",
+    },
+    "luo": {
+        "extract": "The Luo of Nyanza and western Kenya are a Nilotic people "
+                   "around Lake Victoria, famous for fishing, politics (the "
+                   "Odingas) and music. Their main language is Dholuo.",
+        "url": "https://en.wikipedia.org/wiki/Luo_people",
+    },
+    "kamba": {
+        "extract": "The Kamba (Akamba) of Ukambani (Machakos, Makueni, Kitui) "
+                   "are a Bantu people historically known as traders and "
+                   "carriers, skilled wood-carvers and (formerly) hunters.",
+        "url": "https://en.wikipedia.org/wiki/Kamba_people",
+    },
+    "somali": {
+        "extract": "The Somali are the dominant people of Kenya's North "
+                   "Eastern counties (Garissa, Wajir, Mandera) - Muslim, "
+                   "pastoral, Somali-speaking, with deep trade ties across "
+                   "the Horn of Africa border.",
+        "url": "https://en.wikipedia.org/wiki/Somali_people",
+    },
+    "kisii": {
+        "extract": "The Kisii (Abagusii) of Nyanza's highlands around Kisii "
+                   "town are a Bantu people famous for soapstone carving at "
+                   "Tabaka, coffee and tea farming and one of Kenya's "
+                   "densest populations.",
+        "url": "https://en.wikipedia.org/wiki/Kisii_people",
+    },
+    "mijikenda": {
+        "extract": "The Mijikenda ('nine homes') are the coastal Bantu peoples "
+                   "- Giriama, Digo, Duruma, Chonyi, Ribe, Rabai, Jibana, "
+                   "Kauma, Kambe - whose sacred kaya forests are UNESCO World "
+                   "Heritage Sites.",
+        "url": "https://en.wikipedia.org/wiki/Mijikenda_people",
+    },
+    "maasai": {
+        "extract": "The Maasai are semi-nomadic pastoralists of Narok, "
+                   "Kajiado and the Rift, known worldwide for their red "
+                   "shukas, beadwork, jumping adamu dance and close bond with "
+                   "the savanna and the Mara ecosystem.",
+        "url": "https://en.wikipedia.org/wiki/Maasai_people",
+    },
+    "turkana": {
+        "extract": "The Turkana are pastoral Nilotic people of the vast "
+                   "north-west desert around Lake Turkana, who migrated there "
+                   "in the 18th century and adapted to one of Africa's harshest "
+                   "environments.",
+        "url": "https://en.wikipedia.org/wiki/Turkana_people",
+    },
+    "pokot": {
+        "extract": "The Pokot of West Pokot and Baringo straddle the "
+                   "Kalenjin-Nilotic divide - cattle keepers and herders in "
+                   "one of Kenya's most rugged borderlands.",
+        "url": "https://en.wikipedia.org/wiki/Pokot_people",
+    },
+    "samburu": {
+        "extract": "The Samburu are cousins of the Maasai, pastoralists of "
+                   "northern Kenya's Samburu County with a distinctive "
+                   "colour-full beadwork culture and traditional warriors.",
+        "url": "https://en.wikipedia.org/wiki/Samburu_people",
+    },
+    "embu people": {
+        "extract": "The Embu are the Bantu people of Mount Kenya's southern "
+                   "slopes in Embu County, closely related to the Kikuyu and "
+                   "Mbeere, known for coffee, tea and miraa farming.",
+        "url": "https://en.wikipedia.org/wiki/Embu_people",
+    },
+    "meru people": {
+        "extract": "The Meru are the Bantu people on Mount Kenya's north-east "
+                   "flanks, whose oral tradition says they migrated via the "
+                   "coast under a leader named Mbwaa; tied to the Njuri "
+                   "Ncheke council of elders.",
+        "url": "https://en.wikipedia.org/wiki/Meru_people",
+    },
+    "taita": {
+        "extract": "The Taita (Wataita) inhabit the Taita Hills of "
+                   "Taita-Taveta County - farmers on isolated cloud-forest "
+                   "hills surrounded by Tsavo savanna.",
+        "url": "https://en.wikipedia.org/wiki/Taita_people",
+    },
+    "rendille": {
+        "extract": "The Rendille are an Eastern Cushitic camel-herding people "
+                   "of Marsabit County's Kaisut desert, culturally tied to the "
+                   "Samburu with whom they share festivals.",
+        "url": "https://en.wikipedia.org/wiki/Rendille_people",
+    },
+    "borana": {
+        "extract": "The Borana are Oromo-speaking pastoralists of Marsabit and "
+                   "Isiolo counties who follow the age-set 'gada' system, "
+                   "herding cattle and camels across the northern frontier.",
+        "url": "https://en.wikipedia.org/wiki/Borana_people",
+    },
+    "swahili people": {
+        "extract": "The Swahili (Waswahili) are the people of the East African "
+                   "coast - Muslim, coastal, and heirs of the Indian Ocean "
+                   "trade; their language Swahili became East Africa's lingua "
+                   "franca and one of Kenya's two official tongues.",
+        "url": "https://en.wikipedia.org/wiki/Swahili_people",
+    },
+    "el molo": {
+        "extract": "The El Molo of Lake Turkana's south-eastern shore are "
+                   "Kenya's smallest and most endangered ethnic group - "
+                   "traditionally fisher-people now numbering only a few "
+                   "hundred.",
+        "url": "https://en.wikipedia.org/wiki/El_Molo_people",
+    },
+    "ogiek": {
+        "extract": "The Ogiek are an indigenous hunter-gatherer people of the "
+                   "Mau Forest, recognised by Kenya's constitution as one of "
+                   "its historical marginalised minorities.",
+        "url": "https://en.wikipedia.org/wiki/Ogiek_people",
+    },
+    "teso": {
+        "extract": "The Teso (Iteso) are a Nilotic people straddling western "
+                   "Kenya (Busia) and Uganda, known for farming and their "
+                   "stone 'aqis' homestead tradition.",
+        "url": "https://en.wikipedia.org/wiki/Teso_people",
+    },
+    "kuria": {
+        "extract": "The Kuria of Migori County straddle the Kenya-Tanzania "
+                   "border around Isebania - farmers and cattle keepers whose "
+                   "initiation traditions and abagambi clans define social "
+                   "life.",
+        "url": "https://en.wikipedia.org/wiki/Kuria_people",
+    },
+    "gikuyu mount kenya": {
+        "extract": "For the Kikuyu and related Bantu peoples, Mount Kenya "
+                   "(Kirinyaga, 'place of brightness') is the sacred home of "
+                   "the creator god Ngai - houses were traditionally built "
+                   "with the door facing the mountain.",
+        "url": "https://en.wikipedia.org/wiki/Kirinyaga_(mountain)",
+    },
+    # -- media ---------------------------------------------------------------
+    "daily nation": {
+        "extract": "The Daily Nation (Nation Media Group) is Kenya's "
+                   "bestselling English newspaper and website, founded in 1960 "
+                   "by the Aga Khan's Nation group; it also runs NTV, "
+                   "Nation FM and Taifa Leo.",
+        "url": "https://en.wikipedia.org/wiki/Daily_Nation",
+    },
+    "the standard": {
+        "extract": "The Standard (Standard Group) is Kenya's oldest newspaper, "
+                   "founded in 1902, with the KTN television channel and "
+                   "Radio Maisha; its website is standardmedia.co.ke.",
+        "url": "https://en.wikipedia.org/wiki/The_Standard_(Kenya)",
+    },
+    "citizen tv": {
+        "extract": "Citizen TV (Royal Media Services) is Kenya's most-watched "
+                   "television channel, with Citizen Digital and Radio "
+                   "Citizen - known for strong news coverage and "
+                   "investigative reporting.",
+        "url": "https://en.wikipedia.org/wiki/Citizen_TV_(Kenya)",
+    },
+    "kbc": {
+        "extract": "The Kenya Broadcasting Corporation (KBC) is the state "
+                   "broadcaster, offering radio in many languages and national "
+                   "television since 1964 (formerly Voice of Kenya).",
+        "url": "https://en.wikipedia.org/wiki/Kenya_Broadcasting_Corporation",
+    },
+    "ntv kenya": {
+        "extract": "NTV is Nation Media Group's television channel, known for "
+                   "prime-time news, current affairs and entertainment; "
+                   "launched in 1999 as Nation TV.",
+        "url": "https://en.wikipedia.org/wiki/NTV_(Kenya)",
+    },
+    "ktn": {
+        "extract": "KTN (Kenya Television Network) is Standard Group's TV "
+                   "channel - Kenya's first private television station, "
+                   "launched 1990.",
+        "url": "https://en.wikipedia.org/wiki/KTN_(Kenya)",
+    },
+    "capital fm": {
+        "extract": "Capital FM is a Nairobi-centred English radio and news "
+                   "house (Capital Group) known for urban hits, business and "
+                   "the power breakfast show.",
+        "url": "https://en.wikipedia.org/wiki/Capital_FM_(Kenya)",
+    },
+    "the star kenya": {
+        "extract": "The Star is a Nairobi English newspaper and website "
+                   "(Radio Africa Group, founded 2002) known for sharp "
+                   "political reporting and the 'political barometer' column.",
+        "url": "https://en.wikipedia.org/wiki/The_Star_(Kenya)",
+    },
+    "taifa leo": {
+        "extract": "Taifa Leo is Kenya's leading Swahili daily newspaper, "
+                   "published by Nation Media Group since 1960 - a pillar of "
+                   "Kiswahili journalism.",
+        "url": "https://en.wikipedia.org/wiki/Taifa_Leo",
+    },
+    # -- sport ---------------------------------------------------------------
+    "harambee stars": {
+        "extract": "Harambee Stars is Kenya's national football team. Kenya "
+                   "has never yet qualified for a FIFA World Cup; its biggest "
+                   "moments include the 2004 African Nations Cup and runs to "
+                   "the CHAN semi-finals.",
+        "url": "https://en.wikipedia.org/wiki/Kenya_national_football_team",
+    },
+    "harambee starlets": {
+        "extract": "Harambee Starlets is Kenya's national women's football "
+                   "team, first to qualify Kenya (2016) for the Africa Women "
+                   "Cup of Nations.",
+        "url": "https://en.wikipedia.org/wiki/Kenya_women%27s_national_football_team",
+    },
+    "kenya sevens": {
+        "extract": "Kenya's rugby sevens team, nicknamed Shujaa, is a "
+                   "perennial World Rugby Sevens Series core side and has won "
+                   "the Safari Sevens alongside regional trophies.",
+        "url": "https://en.wikipedia.org/wiki/Kenya_national_rugby_sevens_team",
+    },
+    "gor mahia": {
+        "extract": "Gor Mahia FC of Nairobi is Kenya's most successful "
+                   "football club, with many Kenyan Premier League titles, "
+                   "CECAFA championships, and a devoted following since 1968.",
+        "url": "https://en.wikipedia.org/wiki/Gor_Mahia_F.C.",
+    },
+    "afc leopards": {
+        "extract": "AFC Leopards of Nairobi, founded 1964 as Abaluhya United, "
+                   "is Gor Mahia's great rival - the two sides contest the "
+                   "intense 'Mashemeji derby' in the Kenyan Premier League.",
+        "url": "https://en.wikipedia.org/wiki/AFC_Leopards",
+    },
+    "david rudisha": {
+        "extract": "David Rudisha (born 1988) is Kenya's 800m legend - "
+                   "two-time Olympic champion (2012, 2016) and world-record "
+                   "holder 1:40.91 from London 2012.",
+        "url": "https://en.wikipedia.org/wiki/David_Rudisha",
+    },
+    "faith kipyegon": {
+        "extract": "Faith Kipyegon (born 1994) is Kenya's middle-distance "
+                   "superstar - Olympic 1,500m champion (2016, 2020, 2024) and "
+                   "world-record holder over 1,500m and the mile.",
+        "url": "https://en.wikipedia.org/wiki/Faith_Kipyegon",
+    },
+    "julius yego": {
+        "extract": "Julius Yego (born 1989), nicknamed 'the YouTube javelin "
+                   "man' for teaching himself from online videos, became "
+                   "Kenya's first world javelin champion in 2015 and an "
+                   "Olympic silver medallist.",
+        "url": "https://en.wikipedia.org/wiki/Julius_Yego",
+    },
+    "kevin kiptum": {
+        "extract": "Kevin Kiptum (2000-2024) broke the marathon world record "
+                   "with 2:00:35 at Chicago 2023, becoming the first man under "
+                   "2:01; he died in a road accident in February 2024.",
+        "url": "https://en.wikipedia.org/wiki/Kelvin_Kiptum",
+    },
+    "vivian cheruiyot": {
+        "extract": "Vivian Cheruiyot (born 1983) is one of Kenya's greatest "
+                   "distance runners - world cross-country and track champion "
+                   "in the 5,000m/10,000m and 2016 Olympic silver in the "
+                   "5,000m.",
+        "url": "https://en.wikipedia.org/wiki/Vivian_Cheruiyot",
+    },
+    # -- business, tech & money ----------------------------------------------
+    "m-pesa": {
+        "extract": "M-PESA is Kenya's mobile-money platform launched by "
+                   "Safaricom in 2007 - the world's most successful "
+                   "phone-based payments system, used by over 30 million "
+                   "Kenyans for transfers, payments, loans (M-Shwari, "
+                   "Fuliza) and savings.",
+        "url": "https://en.wikipedia.org/wiki/M-Pesa",
+    },
+    "safaricom": {
+        "extract": "Safaricom is Kenya's largest mobile network operator - a "
+                   "Nairobi-listed company part-owned by the government and "
+                   "Vodafone, running M-PESA, fibre and mobile services in "
+                   "Kenya and Safaricom Ethiopia.",
+        "url": "https://en.wikipedia.org/wiki/Safaricom",
+    },
+    "equity group": {
+        "extract": "Equity Group Holdings is Kenya's biggest bank by customer "
+                   "count - grown by CEO James Mwangi from a micro-lender into "
+                   "a pan-African bank operating across the region.",
+        "url": "https://en.wikipedia.org/wiki/Equity_Bank_Limited",
+    },
+    "kcb": {
+        "extract": "KCB Group, founded 1896, is one of Kenya's oldest and "
+                   "largest banks - full name Kenya Commercial Bank - with "
+                   "operations across East Africa after buying the former "
+                   "NBK.",
+        "url": "https://en.wikipedia.org/wiki/KCB_Group",
+    },
+    "nairobi securities exchange": {
+        "extract": "The Nairobi Securities Exchange (NSE, founded 1954) is "
+                   "East Africa's largest stock market, headquartered in "
+                   "Nairobi with a main and alternative market segment.",
+        "url": "https://en.wikipedia.org/wiki/Nairobi_Securities_Exchange",
+    },
+    "kenya airways": {
+        "extract": "Kenya Airways, 'the Pride of Africa', is Kenya's flag "
+                   "carrier based at JKIA in Nairobi - a member of the SkyTeam "
+                   "alliance flying across Africa, Europe, the Gulf and Asia.",
+        "url": "https://en.wikipedia.org/wiki/Kenya_Airways",
+    },
+    "standard gauge railway": {
+        "extract": "The Standard Gauge Railway (SGR) is Kenya's modern "
+                   "freight and passenger line from Mombasa to Nairobi and "
+                   "Naivasha, built with Chinese financing and opened from "
+                   "2017 - replacing the colonial-era metre-gauge railway.",
+        "url": "https://en.wikipedia.org/wiki/Mombasa%E2%80%93Nairobi_Standard_Gauge_Railway",
+    },
+    "lapsset": {
+        "extract": "LAPSSET (Lamu Port-South Sudan-Ethiopia-Transport "
+                   "corridor) is Kenya's grand infrastructure project: a new "
+                   "port at Lamu, an oil pipeline, roads and rail to link "
+                   "landlocked Ethiopia and South Sudan to the Indian Ocean.",
+        "url": "https://en.wikipedia.org/wiki/LAPSSET_Corridor_Project",
+    },
+    "konza technopolis": {
+        "extract": "Konza Technopolis is Kenya's planned 'silicon savannah' "
+                   "smart city south-east of Nairobi, envisioned as an IT, "
+                   "call-centre and research cluster along the Machakos "
+                   "corridor.",
+        "url": "https://en.wikipedia.org/wiki/Konza_Technopolis",
+    },
+    "olkaria geothermal": {
+        "extract": "The Olkaria geothermal fields near Naivasha host Kenya's "
+                   "flagship geothermal power stations - among Africa's "
+                   "largest - feeding much of Nairobi's electricity via the "
+                   "Olkaria V plants.",
+        "url": "https://en.wikipedia.org/wiki/Olkaria_Geothermal_Power_Station",
+    },
+    "lake turkana wind power": {
+        "extract": "Lake Turkana Wind Power near Loiyangalani (opened 2019) "
+                   "is Africa's largest wind farm - 365 turbines supplying "
+                   "about 15% of Kenya's national grid capacity.",
+        "url": "https://en.wikipedia.org/wiki/Lake_Turkana_Wind_Power_Station",
+    },
+    "m-kopa": {
+        "extract": "M-KOPA is a Nairobi-born 'pay-as-you-go' solar company "
+                   "that finances solar home systems, phones and loans for "
+                   "millions of customers across Kenya, Uganda and beyond.",
+        "url": "https://en.wikipedia.org/wiki/M-KOPA",
+    },
+    "twiga foods": {
+        "extract": "Twiga Foods is a Nairobi-based B2B food-distribution "
+                   "platform that connects smallholder farmers directly to "
+                   "urban kiosks and vendors, cutting out the middleman.",
+        "url": "https://en.wikipedia.org/wiki/Twiga_Foods",
+    },
+    "ihub": {
+        "extract": "iHub, founded in Nairobi in 2010, pioneered East "
+                   "Africa's innovation hubs - a co-working, incubator and "
+                   "developer community space credited with seeding Kenya's "
+                   "tech ecosystem.",
+        "url": "https://en.wikipedia.org/wiki/IHub",
+    },
+    # -- arts, culture & literature -------------------------------------------
+    "ngugi wa thiong'o": {
+        "extract": "Ngugi wa Thiong'o (born 1938, Nyeri) is Kenya's most "
+                   "famous writer - author of 'Weep Not, Child', 'A Grain of "
+                   "Wheat' and 'Petals of Blood', and a fearless champion of "
+                   "writing African literature in African languages.",
+        "url": "https://en.wikipedia.org/wiki/Ngugi_wa_Thiong%27o",
+    },
+    "lupita nyong'o": {
+        "extract": "Lupita Nyong'o (born 1983, Mexico City, raised in Kenya) "
+                   "won the 2014 Best Supporting Actress Oscar for '12 Years "
+                   "a Slave' - the first Kenyan actor to win an Academy "
+                   "Award.",
+        "url": "https://en.wikipedia.org/wiki/Lupita_Nyong%27o",
+    },
+    "sauti sol": {
+        "extract": "Sauti Sol is Kenya's award-winning afro-pop boy band "
+                   "(founded 2005) - albums like 'Midnight Train' and "
+                   "hits such as 'Sura Yako' won them a global following and "
+                   "a Grammy nomination.",
+        "url": "https://en.wikipedia.org/wiki/Sauti_Sol",
+    },
+    "fadhili william": {
+        "extract": "Fadhili William (1938-2001) is the Mombasa-born composer "
+                   "of 'Malaika', one of East Africa's most beloved songs - "
+                   "covered worldwide by Harry Belafonte, Miriam Makeba and "
+                   "Boney M.",
+        "url": "https://en.wikipedia.org/wiki/Fadhili_William",
+    },
+    "nyashinski": {
+        "extract": "Nyashinski (Kamau Njihia) is a Kenyan rapper and singer, "
+                   "a solo superstar after the hip-hop group Kleptomaniax, "
+                   "with hits like 'Mala' and 'Now You Know'.",
+        "url": "https://en.wikipedia.org/wiki/Nyashinski",
+    },
+    "mekatilili wa menza": {
+        "extract": "Mekatilili wa Menza (c.1860-1924) was the Giriama "
+                   "prophetess and women's leader who defied the British "
+                   "colonial administration's forced-labour conscription in "
+                   "coastal Kenya after 1913 - a heroine of early resistance.",
+        "url": "https://en.wikipedia.org/wiki/Mekatilili_wa_Menza",
+    },
+    "oginga odinga": {
+        "extract": "Jaramogi Oginga Odinga (1911-1994) was Kenya's first "
+                   "Vice-President after independence, later the fireside "
+                   "opposition voice, and father of Raila Odinga - the "
+                   "founding father of Kenyan multiparty democracy.",
+        "url": "https://en.wikipedia.org/wiki/Oginga_Odinga",
+    },
+    "jm kariuki": {
+        "extract": "J.M. Kariuki (1929-1975), 'JM', was one of the post-"
+                   "independence era's most popular MPs - a Mau Mau veteran "
+                   "and crusader for the poor whose 1975 assassination "
+                   "shocked the nation.",
+        "url": "https://en.wikipedia.org/wiki/Josiah_Mwangi_Kariuki",
+    },
+    "ronald ngala": {
+        "extract": "Ronald Ngala (1923-1972) led the coastal KADU party in "
+                   "the independence negotiations, championing majimboism "
+                   "(regionalism) and minority protection in Kenya's "
+                   "constitution.",
+        "url": "https://en.wikipedia.org/wiki/Ronald_Ngala",
+    },
+    "pio gama pinto": {
+        "extract": "Pio Gama Pinto (1927-1965) was a Kenyan-Goan "
+                   "independence activist and anti-colonial journalist, "
+                   "assassinated in 1965 - among the first political murders "
+                   "of independent Kenya.",
+        "url": "https://en.wikipedia.org/wiki/Pio_Gama_Pinto",
+    },
+    "louis leakey": {
+        "extract": "Louis Leakey (1903-1972) and wife Mary (1913-1996) were "
+                   "the paleoanthropologists who made the Great Rift Valley "
+                   "famous - their Olduvai and Koobi Fora finds helped prove "
+                   "humans evolved in Africa.",
+        "url": "https://en.wikipedia.org/wiki/Louis_Leakey",
+    },
+    "richard leakey": {
+        "extract": "Richard Leakey (1944-2022), son of Louis and Mary, led "
+                   "fossil-hunting expeditions that uncovered Homo habilis "
+                   "and Homo erectus remains, and later headed the Kenya "
+                   "Wildlife Service in the ivory war.",
+        "url": "https://en.wikipedia.org/wiki/Richard_Leakey",
+    },
+    # -- more national schools ------------------------------------------------
+    "maranda high school": {
+        "extract": "Maranda High School is a national boys' school in "
+                   "Bondo, Siaya County (est. 1946) - one of Kenya's "
+                   "top-performing schools, alma mater of many leaders and "
+                   "professionals.",
+        "url": "https://en.wikipedia.org/wiki/Maranda_High_School",
+    },
+    "kakamega high school": {
+        "extract": "Kakamega High School is a national boys' school in "
+                   "Kakamega town (est. 1931), consistently among Kenya's "
+                   "best, with the Green Commandos football tradition.",
+        "url": "https://en.wikipedia.org/wiki/Kakamega_High_School",
+    },
+    "nakuru high school": {
+        "extract": "Nakuru High School is a national boys' school in "
+                   "Nakuru - a school with strong academic results and a "
+                   "rich hockey history.",
+        "url": "https://en.wikipedia.org/wiki/Nakuru_High_School",
+    },
+    "nyeri high school": {
+        "extract": "Nyeri High School is a national boys' school in Nyeri "
+                   "town (est. 1947), with top KCSE results and a proud "
+                   "agricultural heritage.",
+        "url": "https://en.wikipedia.org/wiki/Nyeri_High_School",
+    },
+    "kapsabet boys": {
+        "extract": "Kapsabet High School is a national boys' school in "
+                   "Nandi County - among Kenya's best-performing, with a "
+                   "long list of doctors, engineers and leaders.",
+        "url": "https://en.wikipedia.org/wiki/Kapsabet_High_School",
+    },
+    "butere girls": {
+        "extract": "Butere Girls' High School is a national girls' school "
+                   "in western Kenya (est. 1931), historically a sister "
+                   "school to Maseno, producing many leaders and academics.",
+        "url": "https://en.wikipedia.org/wiki/Butere_High_School",
+    },
+    "mary leakey high school": {
+        "extract": "Mary Leakey High School (Mbotela, Molo) is a national "
+                   "girls' school, consistently among Kenya's best "
+                   "performing, named after the paleoanthropologist Mary "
+                   "Leakey.",
+        "url": "https://en.wikipedia.org/wiki/Mary_Leakey_High_School",
+    },
+    "moi girls eldoret": {
+        "extract": "Moi Girls' High School Eldoret is a national girls' "
+                   "school in the North Rift with stellar KCSE results and "
+                   "the alma mater of many leading women.",
+        "url": "https://en.wikipedia.org/wiki/Moi_Girls_Eldoret",
+    },
+    "cardinal otunga school": {
+        "extract": "Cardinal Otunga High School Mosocho (Kisii County) is a "
+                   "national boys' catholic school (est. 1942) with a "
+                   "legendary academic record.",
+        "url": "https://en.wikipedia.org/wiki/Cardinal_Otunga_High_School_Mosocho",
+    },
+    "kisii school": {
+        "extract": "Kisii School is a national boys' school in Kisii town "
+                   "(est. 1932), one of Kenya's oldest, alma mater of "
+                   "politicians, judges and professionals.",
+        "url": "https://en.wikipedia.org/wiki/Kisii_High_School",
+    },
+    "chewoyet high": {
+        "extract": "Chewoyet High School is a national boys' school near "
+                   "Kapenguria, West Pokot - a rising KCSE power in the "
+                   "North Rift.",
+        "url": "https://en.wikipedia.org/wiki/Chewoyet_High_School",
+    },
+    "sacho high school": {
+        "extract": "Sacho High School is a national boys' school in "
+                   "Koibatek, Baringo County - alma mater of Daniel arap "
+                   "Moi and many Kalenjin professionals.",
+        "url": "https://en.wikipedia.org/wiki/Sacho_High_School",
+    },
+    # -- more universities ----------------------------------------------------
+    "moi university": {
+        "extract": "Moi University in Eldoret (chartered 1984) is Kenya's "
+                   "second national university, strong in health sciences, "
+                   "forestry and engineering, with its main campus at "
+                   "Kesses.",
+        "url": "https://en.wikipedia.org/wiki/Moi_University",
+    },
+    "egerton university": {
+        "extract": "Egerton University in Njoro (chartered 1987, from a 1939 "
+                   "agricultural college) is Kenya's specialist agricultural "
+                   "university, famous for agronomy and animal-science "
+                   "research.",
+        "url": "https://en.wikipedia.org/wiki/Egerton_University",
+    },
+    "maseno university": {
+        "extract": "Maseno University sits on the equator near Kisumu "
+                   "(chartered 2001), leading in health, education and "
+                   "environmental sciences.",
+        "url": "https://en.wikipedia.org/wiki/Maseno_University",
+    },
+    "masinde muliro university": {
+        "extract": "Masinde Muliro University of Science and Technology "
+                   "(MMUST, Kakamega, chartered 2007) takes its name from "
+                   "the independence politician Masinde Muliro.",
+        "url": "https://en.wikipedia.org/wiki/Masinde_Muliro_University_of_Science_and_Technology",
+    },
+    "mount kenya university": {
+        "extract": "Mount Kenya University (MKU, Thika) is Kenya's largest "
+                   "private university by student numbers, with campuses "
+                   "across Kenya and in Uganda and Rwanda.",
+        "url": "https://en.wikipedia.org/wiki/Mount_Kenya_University",
+    },
+    "strathmore university": {
+        "extract": "Strathmore University in Nairobi (from a 1961 accountancy "
+                   "college, university 2002) is Kenya's leading business "
+                   "and law university, with the Strathmore Law School and "
+                   "iLabAfrica.",
+        "url": "https://en.wikipedia.org/wiki/Strathmore_University",
+    },
+    "kca university": {
+        "extract": "KCA University in Ruaraka, Nairobi (chartered 2007) grew "
+                   "out of the Kenya College of Accountancy - strong in "
+                   "accounting, business and IT.",
+        "url": "https://en.wikipedia.org/wiki/KCA_University",
+    },
+    "usiu-africa": {
+        "extract": "United States International University-Africa (USIU-"
+                   "Africa) in Nairobi is a private university with an "
+                   "American-style curriculum, strong in business and "
+                   "international relations.",
+        "url": "https://en.wikipedia.org/wiki/United_States_International_University_Africa",
+    },
+    "daystar university": {
+        "extract": "Daystar University in Nairobi is a private Christian "
+                   "university (chartered 1994) known for communication, "
+                   "journalism and leadership training.",
+        "url": "https://en.wikipedia.org/wiki/Daystar_University",
+    },
+    "cuea": {
+        "extract": "The Catholic University of Eastern Africa (CUEA, "
+                   "Lang'ata, Nairobi) is the region's main Catholic "
+                   "university, training priests, theologians and "
+                   "professionals since 1992.",
+        "url": "https://en.wikipedia.org/wiki/Catholic_University_of_Eastern_Africa",
+    },
+    "aga khan university": {
+        "extract": "Aga Khan University (AKU), with its Nairobi campus, is "
+                   "the region's premier private health-sciences university, "
+                   "running the Aga Khan University Hospital in Nairobi.",
+        "url": "https://en.wikipedia.org/wiki/Aga_Khan_University",
+    },
+    "jooust": {
+        "extract": "Jaramogi Oginga Odinga University of Science and "
+                   "Technology (JOOUST) in Bondo, Siaya County, chartered "
+                   "2013, is named after Jaramogi Oginga Odinga.",
+        "url": "https://en.wikipedia.org/wiki/Jaramogi_Oginga_Odinga_University_of_Science_and_Technology",
+    },
+    "kisii university": {
+        "extract": "Kisii University (chartered 2007 from a 1965 college) is "
+                   "the highlands university of Nyanza, with campuses in "
+                   "Kisii, Eldoret and Kericho.",
+        "url": "https://en.wikipedia.org/wiki/Kisii_University",
+    },
+    "karatina university": {
+        "extract": "Karatina University in Nyeri County (chartered 2013, "
+                   "from Karatina College) serves Mount Kenya's education "
+                   "belt with tourism and agribusiness courses.",
+        "url": "https://en.wikipedia.org/wiki/Karatina_University",
+    },
+    "chuka university": {
+        "extract": "Chuka University on the slopes of Mount Kenya (from "
+                   "Egerton's Chuka campus, university 2013) specialises in "
+                   "agriculture, education and business.",
+        "url": "https://en.wikipedia.org/wiki/Chuka_University",
+    },
+    "dedan kimathi university": {
+        "extract": "Dedan Kimathi University of Technology (DeKUT) in Nyeri "
+                   "is a technical university founded from a JKUAT campus, "
+                   "named in honour of the Mau Mau leader.",
+        "url": "https://en.wikipedia.org/wiki/Dedan_Kimathi_University_of_Technology",
+    },
+    "technical university of kenya": {
+        "extract": "The Technical University of Kenya (TUK, formerly Kenya "
+                   "Polytechnic, Nairobi) is Kenya's oldest technical "
+                   "institution (1961), now a full university of engineering "
+                   "and technology.",
+        "url": "https://en.wikipedia.org/wiki/Technical_University_of_Kenya",
+    },
+    "technical university of mombasa": {
+        "extract": "The Technical University of Mombasa (TUM, from Mombasa "
+                   "Polytechnic, chartered 2013) is the coast's technology "
+                   "university.",
+        "url": "https://en.wikipedia.org/wiki/Technical_University_of_Mombasa",
+    },
+    "south eastern kenya university": {
+        "extract": "South Eastern Kenya University (SEKU, in Kitui county, "
+                   "chartered 2013 from JKUAT Kitui campus) serves eastern "
+                   "Kenya's drier counties.",
+        "url": "https://en.wikipedia.org/wiki/South_Eastern_Kenya_University",
+    },
+    "university of eldoret": {
+        "extract": "The University of Eldoret (chartered 2013, from Moi "
+                   "University's Chepkoilel campus) specialises in "
+                   "agriculture, forestry and environmental sciences.",
+        "url": "https://en.wikipedia.org/wiki/University_of_Eldoret",
+    },
+    "laikipia university": {
+        "extract": "Laikipia University in Nyahururu (chartered 2013) is the "
+                   "central Rift's university, strong in education and "
+                   "conservation sciences near the Laikipia ranches.",
+        "url": "https://en.wikipedia.org/wiki/Laikipia_University",
+    },
+    "university of embu": {
+        "extract": "The University of Embu (from Egerton's Embu campus, "
+                   "chartered 2013) specialises in agriculture, food "
+                   "science and veterinary medicine.",
+        "url": "https://en.wikipedia.org/wiki/University_of_Embu",
+    },
+}
+_KENYA_FACTS.update(_EXTRA_KENYA_FACTS)
+
+# --- third batch: holders of the roles above + broad 10x coverage ---------
+#
+# Everything here is a *short, safe, offline* one-paragraph answer. Sources
+# are the ordinary public encyclopedias/databases already used elsewhere in
+# this module; nothing here is scraped, paid or API-gated.
+_EXTRA_KENYA_FACTS_2 = {
+    # -- current holders of the roles matched in _EXTRA_GOV_ROLES -------------
+    "martha koome": {
+        "extract": "Martha Koome has been Chief Justice of Kenya since 2021 "
+                   "and the first woman to hold the office, chairing the "
+                   "Supreme Court after a long career as an advocate.",
+        "url": "https://en.wikipedia.org/wiki/Martha_Koome",
+    },
+    "kithure kindiki": {
+        "extract": "Kithure Kindiki has been Deputy President of Kenya since "
+                   "October 2024, a Tharaka-Nithi senator and constitutional "
+                   "law professor who previously served as Interior cabinet "
+                   "secretary.",
+        "url": "https://en.wikipedia.org/wiki/Kithure_Kindiki",
+    },
+    "moses wetang'ula": {
+        "extract": "Moses Wetang'ula is Speaker of Kenya's National Assembly "
+                   "(2022-), a Bungoma senator and former Finance and Foreign "
+                   "Affairs minister who chairs the Ford Kenya party.",
+        "url": "https://en.wikipedia.org/wiki/Moses_Wetang%27ula",
+    },
+    "amason kingi": {
+        "extract": "Amason Kingi is Speaker of Kenya's Senate (2013-), "
+                   "former Kilifi governor and earlier a member of the "
+                   "coastal CNC movement.",
+        "url": "https://en.wikipedia.org/wiki/Amason_Kingi",
+    },
+    # -- universities ---------------------------------------------------------
+    "taita taveta university": {
+        "extract": "Taita Taveta University, chartered in 2016 at Voi, is a "
+                   "public university strong in mining, geology, water and "
+                   "agricultural engineering for the coastal uplands.",
+        "url": "https://en.wikipedia.org/wiki/Taita_Taveta_University",
+    },
+    "kirinyaga university": {
+        "extract": "Kirinyaga University is a public university chartered in "
+                   "2016 at Kerugoya, teaching agriculture, business and "
+                   "technology in central Kenya.",
+        "url": "https://en.wikipedia.org/wiki/Kirinyaga_University",
+    },
+    "murang'a university of technology": {
+        "extract": "Murang'a University of Technology, a public university "
+                   "chartered in 2021, focuses on engineering and technology "
+                   "in central Kenya.",
+        "url": "https://en.wikipedia.org/wiki/Murang%27a_University_of_Technology",
+    },
+    "rongo university": {
+        "extract": "Rongo University is a public university in Migori "
+                   "County, grown from an Egerton University campus and "
+                   "chartered in 2016.",
+        "url": "https://en.wikipedia.org/wiki/Rongo_University",
+    },
+    "garissa university": {
+        "extract": "Garissa University is a public university in north-"
+                   "eastern Kenya offering agriculture, education and "
+                   "Islamic studies, chartered in 2015.",
+        "url": "https://en.wikipedia.org/wiki/Garissa_University",
+    },
+    "maasai mara university": {
+        "extract": "Maasai Mara University, chartered in 2013 in Narok, is "
+                   "the public university beside the Maasai Mara, strong in "
+                   "tour guiding, wildlife and education.",
+        "url": "https://en.wikipedia.org/wiki/Maasai_Mara_University",
+    },
+    "co-operative university of kenya": {
+        "extract": "The Co-operative University of Kenya (CUK) in Nairobi is "
+                   "the university of the cooperative movement, offering "
+                   "business, finance and cooperatives programmes.",
+        "url": "https://en.wikipedia.org/wiki/Co-operative_University_of_Kenya",
+    },
+    "kabarak university": {
+        "extract": "Kabarak University is a private university in Nakuru "
+                   "County founded with the Moi family in 2002, known for "
+                   "education, business and health sciences.",
+        "url": "https://en.wikipedia.org/wiki/Kabarak_University",
+    },
+    "zetech university": {
+        "extract": "Zetech University is a private university at Ruiru "
+                   "focused on technology, business and applied sciences for "
+                   "young urban learners.",
+        "url": "https://en.wikipedia.org/wiki/Zetech_University",
+    },
+    "st paul's university": {
+        "extract": "Saint Paul's University in Limuru is a private "
+                   "(Anglican) university, one of Kenya's oldest institutions "
+                   "of higher learning.",
+        "url": "https://en.wikipedia.org/wiki/St._Paul%27s_University,_Kenya",
+    },
+    # -- towns & settlements --------------------------------------------------
+    "ruiru": {
+        "extract": "Ruiru is a fast-growing industrial and commuter town in "
+                   "Kiambu County on the Thika superhighway north of "
+                   "Nairobi, a hub of factories and new estates.",
+        "url": "https://en.wikipedia.org/wiki/Ruiru",
+    },
+    "kitengela": {
+        "extract": "Kitengela is a booming satellite town in Kajiado County "
+                   "on the southern edge of Nairobi, home of the A.I.C. "
+                   "Girls' School and the Kitengela glass artists.",
+        "url": "https://en.wikipedia.org/wiki/Kitengela",
+    },
+    "ongata rongai": {
+        "extract": "Ongata Rongai is a residential town in Kajiado County "
+                   "just south of Nairobi, growing fast along the Magadi "
+                   "road.",
+        "url": "https://en.wikipedia.org/wiki/Ongata_Rongai",
+    },
+    "limuru": {
+        "extract": "Limuru is a tea-growing highland town in Kiambu County, "
+                   "home of Wambugu Farmers' and the late novelist Ngugi wa "
+                   "Thiong'o's birthplace country.",
+        "url": "https://en.wikipedia.org/wiki/Limuru",
+    },
+    "nanyuki": {
+        "extract": "Nanyuki is a garrison and farming town on the equator at "
+                   "the foot of Mount Kenya in Laikipia County, gateway to "
+                   "the mountain and a big horse-and-safari base.",
+        "url": "https://en.wikipedia.org/wiki/Nanyuki",
+    },
+    "maralal": {
+        "extract": "Maralal is the rugged frontier town of Samburu County, "
+                   "famous for the Maralal Camel Derby and the UK David "
+                   "Sheldrick-era independence history of northern Kenya.",
+        "url": "https://en.wikipedia.org/wiki/Maralal",
+    },
+    "lodwar": {
+        "extract": "Lodwar is Turkana County's hot frontier capital on the "
+                   "road and air route to Lake Turkana, a centre of the "
+                   "north-western pastoral economy.",
+        "url": "https://en.wikipedia.org/wiki/Lodwar",
+    },
+    "moyale": {
+        "extract": "Moyale is a busy border town on the Kenya-Ethiopia "
+                   "frontier in Marsabit County, the southern end of the "
+                   "LAPSSET highway corridor.",
+        "url": "https://en.wikipedia.org/wiki/Moyale",
+    },
+    "watamu": {
+        "extract": "Watamu is a palm-fringed resort and turtle-nesting "
+                   "village in Kilifi County beside Watamu Marine National "
+                   "Park and the Gede ruins.",
+        "url": "https://en.wikipedia.org/wiki/Watamu",
+    },
+    "diani": {
+        "extract": "Diani Beach, near Ukunda on the south coast, is Kenya's "
+                   "best-known white-sand resort stretch, lined with "
+                   "hotels and coral reefs.",
+        "url": "https://en.wikipedia.org/wiki/Diani_Beach",
+    },
+    "ukunda": {
+        "extract": "Ukunda is the busy gateway town of the south coast that "
+                   "serves Diani Beach, with its airstrip and buzzing "
+                   "market.",
+        "url": "https://en.wikipedia.org/wiki/Ukunda",
+    },
+    "ol donyo sabuk": {
+        "extract": "Ol Donyo Sabuk, also called Kilimambogo, is the lonely "
+                   "mountain east of Thika where the 14 Falls flow - a "
+                   "former MacMillan estate now a national park.",
+        "url": "https://en.wikipedia.org/wiki/Ol_Donyo_Sabuk",
+    },
+    "kilimambogo": {
+        "extract": "Kilimambogo is the Kikuyu name of Ol Donyo Sabuk, the "
+                   "mountain east of Nairobi with the historic MacMillan "
+                   "burial site at its peak.",
+        "url": "https://en.wikipedia.org/wiki/Ol_Donyo_Sabuk",
+    },
+    # -- lakes ------------------------------------------------------------------
+    "lake naivasha": {
+        "extract": "Lake Naivasha is Kenya's sweet-water Rift Valley lake of "
+                   "hippos and pelicans, west of Nairobi, ringed by flower "
+                   "farms and the historic Happy Valley country.",
+        "url": "https://en.wikipedia.org/wiki/Lake_Naivasha",
+    },
+    "lake nakuru": {
+        "extract": "Lake Nakuru, the flamingo lake inside Lake Nakuru "
+                   "National Park, is an alkaline soda lake in the Rift "
+                   "Valley that also shelters rhinos.",
+        "url": "https://en.wikipedia.org/wiki/Lake_Nakuru",
+    },
+    "lake baringo": {
+        "extract": "Lake Baringo is a fresh-water Rift Valley lake north of "
+                   "Nakuru, famed for its bird life, crocodiles and the "
+                   "island camps of the Njemps people.",
+        "url": "https://en.wikipedia.org/wiki/Lake_Baringo",
+    },
+    "simbi nyaima": {
+        "extract": "Simbi Nyaima is the legendary 'vanishing village' lake "
+                   "in Homa Bay County - Luo folklore says a thriving "
+                   "village sank beneath the waters that now fill it.",
+        "url": "https://en.wikipedia.org/wiki/Simbi_Nyaima",
+    },
+    # -- rivers -----------------------------------------------------------------
+    "mara river": {
+        "extract": "The Mara River is the river of the great wildebeest "
+                   "migration, crossed each year by hundreds of thousands of "
+                   "animals entering the Maasai Mara from the Serengeti.",
+        "url": "https://en.wikipedia.org/wiki/Mara_River",
+    },
+    "nairobi river": {
+        "extract": "The Nairobi River flows through Kenya's capital into the "
+                   "Athi system, passing the National Museum and the "
+                   "watershed that shapes the city's valleys.",
+        "url": "https://en.wikipedia.org/wiki/Nairobi_River",
+    },
+    "mbagathi river": {
+        "extract": "The Mbagathi River marks the southern boundary of Nairobi "
+                   "National Park, where lions shelter a few minutes from "
+                   "the city centre.",
+        "url": "https://en.wikipedia.org/wiki/Mbagathi_River",
+    },
+    "turkwell": {
+        "extract": "The Turkwell (Turkwel) River drains the western "
+                   "highlands into Lake Turkana, dammed at Turkwel Gorge for "
+                   "Kenya's biggest hydro station.",
+        "url": "https://en.wikipedia.org/wiki/Turkwel_River",
+    },
+    "sondu miriu": {
+        "extract": "The Sondu-Miriu River tumbles from the Nandi highlands "
+                   "to Lake Victoria and powers a small hydro plant that "
+                   "feeds the western grid.",
+        "url": "https://en.wikipedia.org/wiki/Sondu_Miriu_River",
+    },
+    # -- parks & reserves -------------------------------------------------------
+    "kakamega forest": {
+        "extract": "Kakamega Forest is Kenya's only tropical rainforest, a "
+                   "western refuge of monkeys, 400 bird species and the "
+                   "endemic Kakamega glass frog.",
+        "url": "https://en.wikipedia.org/wiki/Kakamega_Forest",
+    },
+    "watamu marine": {
+        "extract": "Watamu Marine National Park off the Kilifi coast "
+                   "protects the coral gardens, turtles and sea birds of the "
+                   "Mida Creek ecosystem.",
+        "url": "https://en.wikipedia.org/wiki/Watamu_Marine_National_Park",
+    },
+    "kiunga marine": {
+        "extract": "Kiunga Marine National Reserve along the Lamu coast "
+                   "protects a chain of coral islands, mangroves and "
+                   "dugongs in the northern Indian Ocean.",
+        "url": "https://en.wikipedia.org/wiki/Kiunga_Marine_National_Reserve",
+    },
+    "ndere island": {
+        "extract": "Ndere Island National Park sits as a bird sanctuary in "
+                   "Lake Victoria off Kisumu Bay, where herons and cormorants "
+                   "nest and Ogaa, the sacred rock, is revered.",
+        "url": "https://en.wikipedia.org/wiki/Ndere_Island_National_Park",
+    },
+    "dongo kundu": {
+        "extract": "Dongo Kundu is the industrial and freeport zone being "
+                   "developed between Mombasa and the mainland, part of the "
+                   "new Kipevu mega-container development.",
+        "url": "https://en.wikipedia.org/wiki/Dongo_Kundu",
+    },
+    # -- economy, utilities & public services -----------------------------------
+    "kengen": {
+        "extract": "KenGen, Kenya Electricity Generating Company, is the "
+                   "state power producer running the Olkaria geothermal "
+                   "fields, dams on Seven Forks and wind at Ngong.",
+        "url": "https://en.wikipedia.org/wiki/KenGen",
+    },
+    "kenya power": {
+        "extract": "Kenya Power (KPLC) is the national electricity "
+                   "distribution utility that buys from KenGen and others "
+                   "and sells to homes and businesses over the national "
+                   "grid.",
+        "url": "https://en.wikipedia.org/wiki/Kenya_Power",
+    },
+    "kenya ports authority": {
+        "extract": "The Kenya Ports Authority (KPA) operates the Port of "
+                   "Mombasa, East Africa's main gate, and the newly built "
+                   "Lamu Port.",
+        "url": "https://en.wikipedia.org/wiki/Kenya_Ports_Authority",
+    },
+    "eabl": {
+        "extract": "East African Breweries Limited (EABL), brewer of Tusker "
+                   "and Pilsner, is Kenya's biggest drinks company and one "
+                   "of the largest listed firms.",
+        "url": "https://en.wikipedia.org/wiki/East_African_Breweries",
+    },
+    "airtel kenya": {
+        "extract": "Airtel Kenya is the second mobile network operator, "
+                   "offering voice, data and the Airtel Money wallet in "
+                   "competition with Safaricom.",
+        "url": "https://en.wikipedia.org/wiki/Airtel_Kenya",
+    },
+    "co-op bank": {
+        "extract": "The Co-operative Bank of Kenya, built from the "
+                   "cooperative movement, is one of the country's largest "
+                   "banks with a strong SME base.",
+        "url": "https://en.wikipedia.org/wiki/Co-operative_Bank_of_Kenya",
+    },
+    "e-citizen": {
+        "extract": "e-Citizen is the Kenyan government's online services "
+                   "portal where citizens pay taxes, apply for licences and "
+                   "passports and do business with the state digitally.",
+        "url": "https://en.wikipedia.org/wiki/ECitizen",
+    },
+    "huduma centre": {
+        "extract": "Huduma Centres are one-stop government service points in "
+                   "counties across Kenya where citizens renew IDs, driving "
+                   "licences and permits under one roof.",
+        "url": "https://hudumacentres.go.ke",
+    },
+    "kenya railways": {
+        "extract": "Kenya Railways operates the colonial-era metre-gauge "
+                   "line once called the 'Lunatic Express' and today's "
+                   "Standard Gauge Railway commuter services on the "
+                   "Nairobi-Mombasa corridor.",
+        "url": "https://en.wikipedia.org/wiki/Kenya_Railways",
+    },
+    "kws": {
+        "extract": "The Kenya Wildlife Service (KWS) is the state agency "
+                   "that protects national parks and reserves and their "
+                   "animals - the rangers of Tsavo, the Mara and the rest.",
+        "url": "https://en.wikipedia.org/wiki/Kenya_Wildlife_Service",
+    },
+    "ntsa": {
+        "extract": "NTSA, the National Transport and Safety Authority, "
+                   "issues the numbered plates and driving licences Kenyans "
+                   "pay for via e-Citizen.",
+        "url": "https://en.wikipedia.org/wiki/National_Transport_and_Safety_Authority",
+    },
+    "kenya shilling": {
+        "extract": "The Kenya shilling (KES) is Kenya's currency, issued by "
+                   "the Central Bank of Kenya, and a major East African "
+                   "trading currency.",
+        "url": "https://en.wikipedia.org/wiki/Kenyan_shilling",
+    },
+    "central bank of kenya": {
+        "extract": "The Central Bank of Kenya (CBK), founded in 1966, issues "
+                   "the shilling, manages the nation's reserves and licences "
+                   "the commercial banks.",
+        "url": "https://en.wikipedia.org/wiki/Central_Bank_of_Kenya",
+    },
+    # -- holidays & national days -------------------------------------------------
+    "mashujaa day": {
+        "extract": "Mashujaa Day (Heroes' Day), October 20, honours Kenya's "
+                   "freedom heroes - the Mau Mau veterans and all who "
+                   "fought for independence.",
+        "url": "https://en.wikipedia.org/wiki/Mashujaa_Day",
+    },
+    "jamhuri day": {
+        "extract": "Jamhuri Day, December 12, marks Kenya becoming a "
+                   "republic in 1964, after independence from Britain in "
+                   "1963.",
+        "url": "https://en.wikipedia.org/wiki/Jamhuri_Day",
+    },
+    "madaraka day": {
+        "extract": "Madaraka Day, June 1, celebrates Kenya's internal "
+                   "self-governance of 1963, when the first true Kenyan "
+                   "government took office.",
+        "url": "https://en.wikipedia.org/wiki/Madaraka_Day",
+    },
+    "utamaduni day": {
+        "extract": "Utamaduni Day, added to the calendar in 2020 around "
+                   "Christmas, honours Kenya's cultural heritage and the "
+                   "nations that make it one country.",
+        "url": "https://en.wikipedia.org/wiki/Utamaduni_Day",
+    },
+    # -- food, wildlife & culture ---------------------------------------------------
+    "ugali": {
+        "extract": "Ugali - maize meal cooked firm - is Kenya's staple food, "
+                   "eaten with sukuma wiki, fish or meat across the "
+                   "country.",
+        "url": "https://en.wikipedia.org/wiki/Posho",
+    },
+    "nyama choma": {
+        "extract": "Nyama choma (roasted meat) is Kenya's favourite eating-"
+                   "out food, served from roadside kibandas and upmarket "
+                   "choma joints alike.",
+        "url": "https://en.wikipedia.org/wiki/Nyama_choma",
+    },
+    "chapati": {
+        "extract": "Chapati, the layered flatbread that came with Indian "
+                   "migrants, is a daily staple in Kenyan homes and "
+                   "hotels.",
+        "url": "https://en.wikipedia.org/wiki/Chapati",
+    },
+    "githeri": {
+        "extract": "Githeri - boiled maize and beans - is the classic "
+                   "highland meal of central Kenya, often served with "
+                   "avocado.",
+        "url": "https://en.wikipedia.org/wiki/Githeri",
+    },
+    "mandazi": {
+        "extract": "Mandazi, the sweet fried doughnut of the Swahili coast, "
+                   "is Kenya's most popular breakfast snack.",
+        "url": "https://en.wikipedia.org/wiki/Mandazi",
+    },
+    "mukimo": {
+        "extract": "Mukimo is the mashed potato-banana-and-maize dish of "
+                   "the Mount Kenya peoples, coloured with pumpkin and "
+                   "greens.",
+        "url": "https://en.wikipedia.org/wiki/Mukimo",
+    },
+    "mursik": {
+        "extract": "Mursik is the Kalenjin soured-milk drink, fermented in "
+                   "a sotet gourd with charcoal - a traditional Rift Valley "
+                   "staple.",
+        "url": "https://en.wikipedia.org/wiki/Mursik",
+    },
+    "big five": {
+        "extract": "The Big Five - lion, leopard, elephant, rhino and "
+                   "buffalo - are the safari big game Kenya is world-famous "
+                   "for.",
+        "url": "https://en.wikipedia.org/wiki/Big_five_game",
+    },
+    "great migration": {
+        "extract": "The Great Migration is the yearly movement of over a "
+                   "million wildebeest between Tanzania's Serengeti and "
+                   "Kenya's Maasai Mara, crossing the Mara River at the "
+                   "famous crossings.",
+        "url": "https://en.wikipedia.org/wiki/Great_migration_(Serengeti)",
+    },
+    "giraffe": {
+        "extract": "Kenya is home to the rare Rothschild's giraffe and to "
+                   "retics east of the Rift, protected at Giraffe Centre and "
+                   "in national parks.",
+        "url": "https://en.wikipedia.org/wiki/Giraffe",
+    },
+    "lion": {
+        "extract": "Lions prowl the Maasai Mara, Amboseli and Tsavo - Tsavo "
+                   "once produced the man-eating lions of 1898, now a tourist "
+                   "icon.",
+        "url": "https://en.wikipedia.org/wiki/Lion",
+    },
+    "african elephant": {
+        "extract": "Kenya's elephants, led by the great tuskers of Amboseli "
+                   "and Tsavo, are among the world's largest land animals "
+                   "and a top safari draw.",
+        "url": "https://en.wikipedia.org/wiki/African_bush_elephant",
+    },
+    "cheetah": {
+        "extract": "Kenya's plains - the Mara, Amboseli and the Laikipia "
+                   "plateau - still shelter the world's fastest land animal, "
+                   "the cheetah.",
+        "url": "https://en.wikipedia.org/wiki/Cheetah",
+    },
+    "black rhino": {
+        "extract": "Kenya is a rhino stronghold, guarding black rhinos at "
+                   "Ol Pejeta, Nakuru and Tsavo and the last northern white "
+                   "rhinos in the world at Ol Pejeta.",
+        "url": "https://en.wikipedia.org/wiki/Black_rhinoceros",
+    },
+    "malkia strikers": {
+        "extract": "Malkia Strikers, Kenya's national women's volleyball "
+                   "team, have been queens of African volleyball for "
+                   "decades, qualifying for the Olympics.",
+        "url": "https://en.wikipedia.org/wiki/Kenya_women%27s_national_volleyball_team",
+    },
+    # -- landscapes, people & history extras ---------------------------------------
+    "ngong hills": {
+        "extract": "The Ngong Hills are the green ridge above Nairobi in "
+                   "Kajiado County - the backdrop of Isak Dinesen's 'Out of "
+                   "Africa' and a favourite weekend hike.",
+        "url": "https://en.wikipedia.org/wiki/Ngong_Hills",
+    },
+    "east africa": {
+        "extract": "East Africa - Kenya, Uganda, Tanzania, Rwanda, Burundi "
+                   "and South Sudan - is the region Kenya anchors, home of "
+                   "the EAC bloc and the Swahili coast.",
+        "url": "https://en.wikipedia.org/wiki/East_Africa",
+    },
+    "great rift valley": {
+        "extract": "The Great Rift Valley slices through Kenya from the "
+                   "Turkana basin to beyond the Maasai Mara - a cradle of "
+                   "humanity and a chain of soda lakes and escarpments.",
+        "url": "https://en.wikipedia.org/wiki/Great_Rift_Valley",
+    },
+    "mau forest complex": {
+        "extract": "The Mau Forest Complex is Kenya's biggest 'water tower', "
+                   "feeding the Mara, Mbagathi and dozens of rivers that "
+                   "supply lakes Victoria and Nakuru.",
+        "url": "https://en.wikipedia.org/wiki/Mau_Forest",
+    },
+    "cherangani hills": {
+        "extract": "The Cherangani Hills are one of Kenya's five water "
+                   "towers, stretching the western highlands where Kerio and "
+                   "Turkwell rise.",
+        "url": "https://en.wikipedia.org/wiki/Cherangani_Hills",
+    },
+    "mount suswa": {
+        "extract": "Mount Suswa is the double-crater volcano between "
+                   "Nairobi and Narok, famous for its lava caves, pink "
+                   "baboons and the Maasai community around it.",
+        "url": "https://en.wikipedia.org/wiki/Mount_Suswa",
+    },
+    "lunatic express": {
+        "extract": "The 'Lunatic Express' was the British nickname for the "
+                   "1901 Mombasa-Nairobi railway, built by thousands of "
+                   "workers and costing many lives through the wilderness.",
+        "url": "https://en.wikipedia.org/wiki/Lunatic_Express",
+    },
+    "vasco da gama pillar": {
+        "extract": "Vasco da Gama's pillar (1499) still stands in Malindi as "
+                   "one of Africa's oldest European monuments, erected by "
+                   "the Portuguese explorer.",
+        "url": "https://en.wikipedia.org/wiki/Vasco_da_Gama_Pillar",
+    },
+    "jumba la mtwana": {
+        "extract": "Jumba la Mtwana ('great house of the slave') is the 14th-"
+                   "century Swahili ruin of coral houses near Mtwapa, one of "
+                   "the coastal ruins of the Kilifi area.",
+        "url": "https://en.wikipedia.org/wiki/Jumba_la_Mtwana",
+    },
+    "presidents of kenya": {
+        "extract": "Kenya has had five presidents since independence in "
+                   "1963: Jomo Kenyatta (1964-78), Daniel arap Moi "
+                   "(1978-2002), Mwai Kibaki (2002-13), Uhuru Kenyatta "
+                   "(2013-22) and William Ruto (2022- ).",
+        "url": "https://en.wikipedia.org/wiki/President_of_Kenya",
+    },
+}
+_KENYA_FACTS.update(_EXTRA_KENYA_FACTS_2)
+
+# Central-government roles that people most often ask about.
+_EXTRA_GOV_ROLES = {
+    "president of kenya": "william ruto",
+    "the president of kenya": "william ruto",
+    "the president": "william ruto",
+    "chief justice of kenya": "martha koome",
+    "the chief justice of kenya": "martha koome",
+    "chief justice": "martha koome",
+    "the chief justice": "martha koome",
+    "deputy president of kenya": "kithure kindiki",
+    "the deputy president of kenya": "kithure kindiki",
+    "deputy president": "kithure kindiki",
+    "the deputy president": "kithure kindiki",
+    "vice president": "kithure kindiki",
+    "the vice president": "kithure kindiki",
+    "speaker of the national assembly": "moses wetang'ula",
+    "the speaker of the national assembly": "moses wetang'ula",
+    "speaker of the senate": "amason kingi",
+    "the speaker of the senate": "amason kingi",
+    "senate speaker": "amason kingi",
+    "the senate speaker": "amason kingi",
+}
+for _role, _holder in _EXTRA_GOV_ROLES.items():
+    _CANONICAL_FACT_ALIASES[_role] = _holder
+
+# Short aliases for the added entries (acronyms, brand names, variants).
+_EXTRA_ALIASES = {
+    "kplc": "kenya power",
+    "sgr": "standard gauge railway",
+    "kpa": "kenya ports authority",
+    "cbk": "central bank of kenya",
+    "tusker": "eabl",
+    "eac": "east africa",
+    "east african community": "east africa",
+    "diani beach": "diani",
+    "kenya currency": "kenya shilling",
+    "kenyan currency": "kenya shilling",
+    "what is the currency of kenya": "kenya shilling",
+}
+for _alias, _canon in _EXTRA_ALIASES.items():
+    _CANONICAL_FACT_ALIASES[_alias] = _canon
+
+
 def _title_relevant(title: str, query: str) -> bool:
     """True if a Wikipedia result's title still concerns the query. The
     REST summary endpoint follows redirects, and simple.wikipedia
@@ -808,9 +2589,6 @@ _WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 
 # OpenStreetMap Nominatim geocoding (free, no key): places.
 _NOMINATIM_API = "https://nominatim.openstreetmap.org/search"
-
-# Mojeek is key-less and index-friendly, giving us a 4th engine.
-_MOJEEK_PAGE = "https://www.mojeek.com/search"
 
 
 # ---------------------------------------------------------------------------
@@ -944,6 +2722,40 @@ def _title_and_text(html: str):
 # Public class the ChatBot instantiates
 # ---------------------------------------------------------------------------
 
+def _cap_name(subject):
+    """Title-case a name without breaking apostrophes: 'murang'a'
+    -> 'Murang'a' (str.title() would give 'Murang'A')."""
+    return " ".join(
+        w[:1].upper() + w[1:] for w in str(subject).split(" ") if w)
+
+
+def _resolve_county_name(subject):
+    """Normalize a town/county subject to a canonical county profile key,
+    or None. 'kitale' -> 'trans nzoia' via the alias map, 'busia county'
+    -> 'busia' by stripping the qualifier."""
+    subj = (subject or "").strip().strip("?").strip(".").strip("!").lower()
+    if not subj:
+        return None
+    if subj in _KENYA_COUNTY_PROFILES:
+        return subj
+    aliased = _CANONICAL_FACT_ALIASES.get(subj, subj)
+    if aliased in _KENYA_COUNTY_PROFILES:
+        return aliased
+    for suf in (" county", " town", " city", " municipality"):
+        if subj.endswith(suf) and subj[: -len(suf)] in _KENYA_COUNTY_PROFILES:
+            return subj[: -len(suf)]
+        if aliased.endswith(suf) and aliased[: -len(suf)] in _KENYA_COUNTY_PROFILES:
+            return aliased[: -len(suf)]
+    # town/capital index from the county profiles
+    idx = _TOWN_INDEX.get(subj)
+    if idx:
+        return idx
+    idx = _TOWN_INDEX.get(aliased)
+    if idx:
+        return idx
+    return None
+
+
 class WebReader:
     """Reads a URL and returns a compact, conversational summary.
 
@@ -1003,8 +2815,20 @@ class WebReader:
         "en": "https://en.wikipedia.org",
         "sw": "https://sw.wikipedia.org",
         "fr": "https://fr.wikipedia.org",
+        "de": "https://de.wikipedia.org",
+        "es": "https://es.wikipedia.org",
+        "pt": "https://pt.wikipedia.org",
+        "zh": "https://zh.wikipedia.org",
+        "hi": "https://hi.wikipedia.org",
+        "ar": "https://ar.wikipedia.org",
+        "ru": "https://ru.wikipedia.org",
+        "ja": "https://ja.wikipedia.org",
     }
-    _WIKI_LANGS = ("simple", "en", "sw", "fr")
+    # First probe always English or Swahili-first for Kenyan topics;
+    # the longer tail widens global recall for obscure subjects. The
+    # 20s budget still caps how many of those probes ever fire.
+    _WIKI_LANGS = ("simple", "en", "sw", "fr",
+                   "de", "es", "pt", "zh", "hi", "ar", "ru", "ja")
     _WIKIQUOTE_HOST = "https://en.wikiquote.org"
     _WIKTIONARY_HOST = "https://en.wiktionary.org"
     _WIKTIONARY_HOSTS = {
@@ -1041,34 +2865,48 @@ class WebReader:
 
     def wikipedia_summary(self, query: str, lang: str = "simple"):
         """Concise intro summary from Wikipedia's REST endpoint (no API
-        key). lang is one of "simple", "en", "sw", "fr". Returns
-        {"title", "extract", "url", "source"} or {"error": str}."""
+        key). lang is one of the _WIKI_LANGS family. The REST path is
+        case-sensitive ("mount kilimanjaro" 404s), so on a miss we retry
+        once with a title-cased page name - but only for the primary
+        prongs (simple/en/sw) so the global-recall tail stays cheap.
+        Returns {"title", "extract", "url", "source"} or {"error": str}."""
         topic = query.strip()
         if not topic:
             return {"error": "what should I look up?"}
-        host = self._WIKI_HOSTS.get(lang, self._WIKI_HOSTS["en"])
-        api_url = (
-            host + "/api/rest_v1/page/summary/"
-            + urllib.parse.quote(topic.replace(" ", "_"))
-        )
-        raw = fetch_html(api_url, timeout=self.timeout_seconds)
-        if isinstance(raw, dict):
-            return {"error": f"couldn't look that up ({raw['error']})"}
-        try:
-            data = json.loads(_decode(raw))
-        except (json.JSONDecodeError, ValueError):
-            return {"error": "couldn't parse the lookup result"}
-        if not isinstance(data, dict):
-            return {"error": "unexpected lookup result"}
-        if data.get("type") in ("disambiguation", "redirect") or not data.get("extract"):
-            # disambiguation or missing page: let the caller move on
-            return {"error": f"no article on {lang}.wikipedia for '{topic}'"}
-        return {
-            "title": data.get("title") or topic,
-            "extract": _WS_RE.sub(" ", data.get("extract") or "").strip()[: _MAX_TEXT_CHARS],
-            "url": data.get("content_urls", {}).get("desktop", {}).get("page") or api_url,
-            "source": f"{lang}.wikipedia.org",
-        }
+        capped = _cap_name(topic)
+        for attempt, page in enumerate((topic, capped)):
+            if attempt and (page == topic or lang not in ("simple", "en", "sw")):
+                break
+            host = self._WIKI_HOSTS.get(lang, self._WIKI_HOSTS["en"])
+            api_url = (
+                host + "/api/rest_v1/page/summary/"
+                + urllib.parse.quote(page.replace(" ", "_"))
+            )
+            raw = fetch_html(api_url, timeout=self.timeout_seconds)
+            if isinstance(raw, dict):
+                if attempt == 0:
+                    continue  # maybe a case issue; one capped retry
+                return {"error": f"couldn't look that up ({raw['error']})"}
+            try:
+                data = json.loads(_decode(raw))
+            except (json.JSONDecodeError, ValueError):
+                if attempt == 0:
+                    continue
+                return {"error": "couldn't parse the lookup result"}
+            if not isinstance(data, dict):
+                return {"error": "unexpected lookup result"}
+            if data.get("type") in ("disambiguation", "redirect") or not data.get("extract"):
+                # disambiguation or missing page: let the caller move on
+                if attempt == 0:
+                    continue
+                return {"error": f"no article on {lang}.wikipedia for '{topic}'"}
+            return {
+                "title": data.get("title") or page,
+                "extract": _WS_RE.sub(" ", data.get("extract") or "").strip()[: _MAX_TEXT_CHARS],
+                "url": data.get("content_urls", {}).get("desktop", {}).get("page") or api_url,
+                "source": f"{lang}.wikipedia.org",
+            }
+        return {"error": f"no article on {lang}.wikipedia for '{topic}'"}
 
     def wikipedia_extract(self, query: str, lang: str = "en", max_chars: int = 2500):
         """DEEPER Wikipedia lookup than the REST summary: uses the
@@ -1164,8 +3002,10 @@ class WebReader:
         # "list of counties" special forms - only when the user asks for the
         # list, never for a specific county ("nakuru county" = Nakuru entry).
         _listy = ("list" in topic or "all" in topic or "names" in topic
-                  or "how many" in topic or "kaunti" in topic)
-        _county_mention = ("county" in topic or "counties" in topic)
+                  or "how many" in topic or "kaunti" in topic or "zote" in topic
+                  or "orodha" in topic or "ngapi" in topic or "majina" in topic)
+        _county_mention = ("county" in topic or "counties" in topic
+                           or "kaunti" in topic)
         if _listy and _county_mention:
             half = len(_KENYA_COUNTIES) // 2
             cols = "\n".join(
@@ -1193,11 +3033,189 @@ class WebReader:
         if not entry:
             return {"error": f"no Kenya factbase entry for '{query}'"}
         return {
-            "title": topic.title(),
+            "title": _cap_name(topic),
             "extract": entry["extract"],
             "url": entry["url"],
             "source": "Kenya factbase",
         }
+
+    def kenya_fact_qa(self, query: str):
+        """Natural-language Kenya questions answered instantly from the
+        same county profiles + factbase: 'who is the governor of busia',
+        'what is the capital of nakuru', 'which county is kitale in',
+        'how many counties does kenya have', 'who is the president'.
+        Returns a result dict or None - everything else keeps flowing
+        down the lookup() chain, so a wrong guess never blocks a real
+        answer from Wikipedia or web search."""
+        q = (query or "").strip().strip("?").strip(".").lower()
+        q = _WS_RE.sub(" ", q)
+        if not q:
+            return None
+
+        def _rdict(title, extract, url):
+            return {"title": title, "extract": extract,
+                    "url": url, "source": "Kenya factbase"}
+
+        # 1) national roles: "who is the president", "who's the chief justice"
+        m = re.search(
+            r"\b(?:who is|who was|who's|who are|tell me who)\s+"
+            r"(?:the\s+)?(president(?: of kenya)?|deputy president(?: of kenya)?|"
+            r"vice president(?: of kenya)?|chief justice(?: of kenya)?|"
+            r"speaker of the national assembly|speaker of the senate)\s*$", q)
+        if m and re.search(r"president|justice|speaker|deputy|vice", m.group(1)):
+            _role = m.group(1)
+            fb = self.kenya_fact_lookup(_role)
+            if "error" in fb and not _role.startswith("the "):
+                # "president" alone isn't a factbase key - "the president" is.
+                fb = self.kenya_fact_lookup("the " + _role)
+            if "extract" in fb:
+                return fb
+
+        # 2) governor questions: "who is the governor of busia"
+        gov_subj = None
+        m = (re.search(r"\bgovernor of\s+(.+?)\s*$", q)
+             or re.search(r"\bgoverns\s+(.+?)\s*$", q))
+        if m:
+            gov_subj = m.group(1).strip().strip("?").strip(".").strip()
+        if "governor" in q or "governs" in q:
+            if gov_subj and gov_subj in ("kenya", "the republic", "the nation"):
+                return _rdict(
+                    "Kenya's leadership",
+                    "Kenya's head of state is the President (William Ruto). "
+                    "Each of Kenya's 47 counties also elects its own "
+                    "governor.",
+                    "https://en.wikipedia.org/wiki/Governor_(Kenya)")
+            cname = _resolve_county_name(gov_subj) if gov_subj else None
+            if cname:
+                _p = _KENYA_COUNTY_PROFILES[cname]
+                if _p[5]:
+                    return _rdict(
+                        f"Governor of {_cap_name(cname)} County",
+                        f"The governor of {_cap_name(cname)} County ({_p[2]} "
+                        f"Kenya) is {_p[5]} (elected 2022).",
+                        f"https://en.wikipedia.org/wiki/"
+                        f"{cname.replace(' ', '_')}_County")
+            if any(w in q for w in ("list", "all", "names", "how many",
+                                    "who are", "counties", "kenya")):
+                lines = [f"   {_cap_name(_cc)} - {_pp[5]}" for _cc, _pp
+                         in sorted(_KENYA_COUNTY_PROFILES.items()) if _pp[5]]
+                if lines:
+                    return _rdict(
+                        "Governors of the 47 counties",
+                        "Every one of Kenya's 47 counties has an elected "
+                        "governor (2022 general election):\n"
+                        + "\n".join(lines),
+                        "https://en.wikipedia.org/wiki/Governor_(Kenya)")
+
+        # 3) capital questions: "what is the capital of nakuru"
+        m = re.search(r"\bcapital of\s+(.+?)\s*$", q)
+        if m:
+            subj = m.group(1).strip().strip("?").strip(".").strip()
+            if subj in ("kenya", "the country", "the nation",
+                        "the republic of kenya"):
+                return _rdict(
+                    "Capital of Kenya",
+                    "Nairobi is the capital of Kenya - the capital since "
+                    "1907, when it was moved from Mombasa.",
+                    "https://en.wikipedia.org/wiki/Nairobi")
+            cname = _resolve_county_name(subj)
+            if cname:
+                _p = _KENYA_COUNTY_PROFILES[cname]
+                return _rdict(
+                    f"Capital of {_cap_name(cname)} County",
+                    f"{_cap_name(_p[1])} is the capital of {_cap_name(cname)} "
+                    f"County ({_p[2]} Kenya, county code {_p[0]:03d}).",
+                    f"https://en.wikipedia.org/wiki/"
+                    f"{cname.replace(' ', '_')}_County")
+
+        # 4) which county / where: "which county is kitale in", "where is voi"
+        m = (re.search(r"\bwhich county (?:is|has)\s+(.+?)\s*$", q)
+             or re.search(r"\bwhat county (?:is|has)\s+(.+?)\s*$", q)
+             or re.match(r"^where\s+(?:is|are)\s+(.+?)\s*$", q))
+        if m:
+            subj = m.group(1).strip().strip("?").strip(".").strip()
+            subj = re.sub(r"\s+in\s*$", "", subj).strip()
+            cname = _resolve_county_name(subj)
+            if cname:
+                _p = _KENYA_COUNTY_PROFILES[cname]
+                return _rdict(
+                    f"{_cap_name(subj)} County",
+                    f"{_cap_name(subj)} is in {_cap_name(cname)} County ({_p[2]} "
+                    f"Kenya; county capital {_cap_name(_p[1])}).",
+                    f"https://en.wikipedia.org/wiki/"
+                    f"{cname.replace(' ', '_')}_County")
+
+        # 5) how many counties - same guarantee as the factbase list.
+        if "how many" in q and ("count" in q or "counties" in q or "county"
+                                in q or "kaunti" in q):
+            return _rdict(
+                "All 47 counties of Kenya",
+                "Kenya is divided into 47 counties (established by the 2010 "
+                "constitution). Each has its own elected governor and "
+                "county assembly.",
+                "https://sw.wikipedia.org/wiki/Mkoa_wa_Kenya")
+
+        # 6) nothing Kenya-specific - let the rest of the chain answer.
+        return None
+
+    def facts_list(self, topic: str, n: int = 5):
+        """'10 facts about X' / 'facts about X'. For counties the answer
+        is structured straight from the profile; for other factbase
+        entries it splits the extract into numbered bullets. Returns a
+        result dict or None (topic not in the factbase)."""
+        try:
+            n = max(1, min(int(n), 12))
+        except Exception:
+            n = 5
+        t = (topic or "").strip().strip("?").strip(".").lower()
+        if not t:
+            return None
+        cname = _resolve_county_name(t)
+        if cname:
+            p = _KENYA_COUNTY_PROFILES[cname]
+            facts = [
+                f"Official name: {_cap_name(cname)} County",
+                f"County code {p[0]:03d} in {p[2]} Kenya",
+                f"County capital: {_cap_name(p[1])}",
+            ]
+            if p[5]:
+                facts.append(f"Governor (2022 election): {p[5]}")
+            if p[3]:
+                facts.append("Main towns: " + ", ".join(
+                    _cap_name(x) for x in p[3]))
+            if p[4]:
+                facts.append(p[4].rstrip(".") + ".")
+            return {
+                "title": f"{n} facts about {_cap_name(cname)} County",
+                "extract": "\n".join(f"  - {f}" for f in facts[:n]),
+                "url": ("https://en.wikipedia.org/wiki/"
+                        + cname.replace(" ", "_") + "_County"),
+                "source": "Kenya factbase",
+            }
+        key = _CANONICAL_FACT_ALIASES.get(t, t)
+        entry = _KENYA_FACTS.get(key)
+        if entry:
+            sentences = [s.strip() for s in re.findall(
+                r"[^.!?]+[.!?]+", entry["extract"]) if s.strip()]
+            if len(sentences) < 2:
+                sentences = [entry["extract"].strip()]
+            return {
+                "title": f"{n} facts about {_cap_name(key)}",
+                "extract": "\n".join(
+                    f"  - {s}" for s in sentences[:n]),
+                "url": entry["url"],
+                "source": "Kenya factbase",
+            }
+        return None
+
+    def format_facts(self, query: str, n: int = 5):
+        """Formats the facts-list answer, falling back to a normal
+        lookup if the topic isn't in the factbase."""
+        fl = self.facts_list(query, n)
+        if fl and "extract" in fl:
+            return (f"{fl['title']}\n\n{fl['extract']}\n\n"
+                    f"(Source: {fl['source']} - {fl['url']})")
+        return self.format_lookup(query)
 
     def wikidata_facts(self, query: str):
         """Structured fact sheet from Wikidata (no API key). Returns
@@ -1208,19 +3226,23 @@ class WebReader:
             subject = query.strip()
             if not subject:
                 return {"error": "what should I look up?"}
-            # 1) resolve the enwiki title to a Wikidata entity id
-            url = (_WIKIDATA_API + "?action=wbgetentities&sites=enwiki&titles="
-                   + urllib.parse.quote(subject) + "&props=labels|descriptions"
-                     "&languages=en&format=json&formatversion=2")
-            raw = _fetch_html_ua(url, timeout=self.timeout_seconds, headers=_WEB_UA)
-            if isinstance(raw, dict):
-                return {"error": raw["error"]}
-            data = json.loads(_decode(raw))
-            ent = data.get("entities") or {}
+            # 1) resolve the enwiki title to a Wikidata entity id (the
+            #    titles= probe is case-sensitive -> retry once capped)
             entity = None
-            for eid, ent_data in ent.items():
-                if eid != "-1" and ent_data and ent_data.get("id"):
-                    entity = ent_data
+            for _cand in dict.fromkeys((subject, _cap_name(subject))):
+                url = (_WIKIDATA_API + "?action=wbgetentities&sites=enwiki&titles="
+                       + urllib.parse.quote(_cand) + "&props=labels|descriptions"
+                         "&languages=en&format=json&formatversion=2")
+                raw = _fetch_html_ua(url, timeout=self.timeout_seconds, headers=_WEB_UA)
+                if isinstance(raw, dict):
+                    return {"error": raw["error"]}
+                data = json.loads(_decode(raw))
+                ent = data.get("entities") or {}
+                for eid, ent_data in ent.items():
+                    if eid != "-1" and ent_data and ent_data.get("id"):
+                        entity = ent_data
+                        break
+                if entity and not (entity.get("missing") and not entity.get("claims")):
                     break
             if not entity or (entity.get("missing") and not entity.get("claims")):
                 return {"error": f"no Wikidata entry for '{subject}'"}
@@ -1288,7 +3310,7 @@ class WebReader:
             if not facts:
                 return {"error": f"no readable facts for '{subject}'"}
             return {
-                "title": (entity.get("labels") or {}).get("en", {}).get("value") or subject.title(),
+                "title": (entity.get("labels") or {}).get("en", {}).get("value") or _cap_name(subject),
                 "description": (entity.get("descriptions") or {}).get("en", {}).get("value", ""),
                 "facts": facts,
             }
@@ -1297,40 +3319,61 @@ class WebReader:
         except Exception as e:  # fail-closed, never raise
             return {"error": f"structured facts unavailable ({e})"}
 
+    _KENYA_NEWS_SITES = (
+        "nation.africa", "citizen.digital", "standardmedia.co.ke", "bbc.com")
+
     def news_search(self, query: str, limit: int = 6, kenyan: bool = None):
         """Fresh headlines from Google News RSS (no API key). Kenyan
-        queries get the Swahili Kenya edition by default. Returns a
-        results list, or None when the feed is unreachable."""
+        queries get the Swahili Kenya edition, plus a second feed
+        scoped to the big Kenyan outlets (Daily Nation, Citizen,
+        Standard, BBC Africa) so local coverage actually surfaces.
+        Returns a results list, or None when every feed fails."""
         if kenyan is None:
             kenyan = _is_kenyan_query(query)
+        quoted = urllib.parse.quote(query)
+        urls = []
         if kenyan:
-            hl_gl = "hl=sw&gl=KE&ceid=KE:sw"
+            urls.append(("https://news.google.com/rss/search?q=" + quoted
+                         + "&hl=sw&gl=KE&ceid=KE:sw"))
+            sites = " OR ".join(f"site:{s}" for s in self._KENYA_NEWS_SITES)
+            urls.append(("https://news.google.com/rss/search?q="
+                         + urllib.parse.quote(query + " (" + sites + ")")
+                         + "&hl=en-US&gl=KE&ceid=KE:en"))
         else:
-            hl_gl = "hl=en-US&gl=US&ceid=US:en"
-        url = ("https://news.google.com/rss/search?q=" + urllib.parse.quote(query)
-               + "&" + hl_gl)
-        raw = _fetch_html_ua(url, timeout=self.timeout_seconds, headers=_WEB_UA)
-        if isinstance(raw, dict):
-            return None
-        html = _decode(raw)
-        # parse RSS <item> blocks with stdlib (feedparser not installed)
-        items = re.findall(
-            r"<item>(.*?)</item>", html, flags=re.IGNORECASE | re.DOTALL)
+            urls.append(("https://news.google.com/rss/search?q=" + quoted
+                         + "&hl=en-US&gl=US&ceid=US:en"))
+
         results = []
-        for block in items[:limit]:
-            title_m = re.search(r"<title>(.*?)</title>", block, re.IGNORECASE | re.DOTALL)
-            link_m = re.search(r"<link>(.*?)</link>", block, re.IGNORECASE | re.DOTALL)
-            if not title_m or not link_m:
+        seen = set()
+        for url in urls:
+            raw = _fetch_html_ua(url, timeout=self.timeout_seconds, headers=_WEB_UA)
+            if isinstance(raw, dict):
                 continue
-            title = re.sub(r"<[^>]+>", "", title_m.group(1)).strip()
-            link = link_m.group(1).strip()
-            if not title or not link:
-                continue
-            results.append({
-                "title": title[:120],
-                "snippet": "(news)" if False else title[:120],
-                "url": link,
-            })
+            html = _decode(raw)
+            items = re.findall(
+                r"<item>(.*?)</item>", html, flags=re.IGNORECASE | re.DOTALL)
+            for block in items:
+                if len(results) >= limit:
+                    break
+                title_m = re.search(r"<title>(.*?)</title>", block,
+                                    re.IGNORECASE | re.DOTALL)
+                link_m = re.search(r"<link>(.*?)</link>", block,
+                                   re.IGNORECASE | re.DOTALL)
+                if not title_m or not link_m:
+                    continue
+                title = re.sub(r"<[^>]+>", "", title_m.group(1)).strip()
+                link = link_m.group(1).strip()
+                if not title or not link:
+                    continue
+                key = (link, title)
+                if key in seen:
+                    continue
+                seen.add(key)
+                results.append({
+                    "title": title[:120],
+                    "snippet": title[:120],
+                    "url": link,
+                })
             if len(results) >= limit:
                 break
         return results or None
@@ -1372,8 +3415,8 @@ class WebReader:
                         if weg:
                             extra = f" Website: {weg}."
                     return {
-                        "title": f"{query.title()} ({ptype} in Kenya)"
-                                 if cc else f"{query.title()} ({ptype})",
+                        "title": f"{_cap_name(query)} ({ptype} in Kenya)"
+                                 if cc else f"{_cap_name(query)} ({ptype})",
                         "extract": (
                             f"{display}.{extra} Coordinate: lat "
                             f"{hit.get('lat', '?')}, lon {hit.get('lon', '?')}."
@@ -1425,16 +3468,19 @@ class WebReader:
     def lookup(self, query: str):
         """Deep, Kenya-centralized multi-source lookup. Walks, in order:
           0. Kenya factbase (offline, instant, always-correct)
+          0a. Natural Kenya questions (governor/capital/which-county)
           1. Wikipedia REST summaries - language order depends on
-             whether the query is Kenyan (sw first) or not
+             whether the query is Kenyan (sw first) or not, with a
+             ~12-language tail widening global recall for misses
           2. Wikipedia title search -> full extract of the match
           3. Deep full-article extracts (en, then sw)
           4. Wiktionary (words & phrases) and Wikiquote (people)
+          4a. Wikidata structured facts (people/places/things backstop)
           5. Common Swahili/French phrases -> curated dictionary
           6. OpenStreetMap place lookup (Kenya-first filtering)
-          7. Merged web search (DuckDuckGo + lite + Bing + Mojeek) +
-             recent Google News, with a deep multi-page read of the
-             best live pages, attributed per source.
+          7. Merged web search (DuckDuckGo + lite + Bing) + recent
+             Google News, with a deep multi-page read of the best
+             live pages, attributed per source.
         Returns the FIRST source that answers. Always fail-closed."""
         topic = query.strip()
         if not topic:
@@ -1453,6 +3499,13 @@ class WebReader:
         fact = self.kenya_fact_lookup(topic)
         if "error" not in fact:
             return fact
+
+        # 0a) Natural Kenya questions ("who is the governor of busia",
+        # "capital of nakuru", "which county is kitale in") resolve
+        # instantly from the same county profiles.
+        qa = self.kenya_fact_qa(topic)
+        if qa:
+            return qa
 
         # 0b) Curated Swahili/French phrase dictionary also answers
         # instantly and is verified, so it must come BEFORE Wikipedia:
@@ -1544,6 +3597,23 @@ class WebReader:
             quote = self.wikiquote(topic)
             if "error" not in quote:
                 return quote
+
+        # 4a) Wikidata structured facts as a final encyclopedic backstop:
+        #     prose sources have already had their chance, so this mainly
+        #     rescues niche entities that Wikidata knows even when their
+        #     Wikipedia page is a stub. Budget-guarded like every call.
+        if not _out_of_budget():
+            wd = self.wikidata_facts(topic)
+            if "error" not in wd and wd.get("facts"):
+                _desc = (wd.get("description") or "").strip()
+                _facts_txt = "\n".join(
+                    f"- {_k}: {_v}" for _k, _v in wd["facts"][:8])
+                return {
+                    "title": wd.get("title") or topic,
+                    "extract": (_desc + "\n" + _facts_txt).strip(),
+                    "url": "https://www.wikidata.org",
+                    "source": "Wikidata",
+                }
 
         # 4b) Common Swahili / French phrases that aren't Wikipedia
         #     subjects -> last-resort curated translation dictionary
@@ -1812,43 +3882,6 @@ class WebReader:
                     break
         return results
 
-    def mojeek_search(self, query: str, limit: int = 8):
-        """Mojeek - a key-less, private, index-friendly engine (no
-        region bias controls, but adds engine diversity). Returns a
-        results list or [] when it can't be parsed."""
-        params = urllib.parse.urlencode({"q": query})
-        raw = _fetch_html_ua(_MOJEEK_PAGE + "?" + params,
-                             timeout=self.timeout_seconds, headers=_WEB_UA)
-        if isinstance(raw, dict):
-            return []
-        html = _decode(raw)
-        results = []
-        if BS4_AVAILABLE:
-            soup = BeautifulSoup(html, "html.parser")
-            for li in soup.select("li.result, li.standard, ul.results-standard li"):
-                a = li.select_one("h2 a, .title a, a[href^='http']")
-                if a is None:
-                    continue
-                href = a.get("href", "")
-                title = a.get_text(" ", strip=True)
-                p = li.select_one("p.s") or li.select_one(".summary") or li.select_one("p")
-                snippet = p.get_text(" ", strip=True) if p else ""
-                if href.startswith("http") and title:
-                    results.append({"title": title[:80], "snippet": snippet[:200], "url": href})
-                if len(results) >= limit:
-                    break
-        else:
-            for m in re.finditer(
-                r'<li[^>]*class="[^"]*result[^"]*".*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
-                html, flags=re.I | re.S,
-            ):
-                title = _WS_RE.sub(" ", _HTML_TAG_RE.sub(" ", m.group(2))).strip()
-                if title and m.group(1).startswith("http"):
-                    results.append({"title": title[:80], "snippet": "", "url": m.group(1)})
-                if len(results) >= limit:
-                    break
-        return results
-
     @staticmethod
     def _clean_ddg_href(href: str) -> str:
         """DuckDuckGo wraps result URLs (/?uddg=<encoded> on html/lite);
@@ -1897,9 +3930,9 @@ class WebReader:
 
     def format_lookup(self, query: str) -> str:
         """Human-friendly reply for the 'look up <topic>' command. Walks
-        the deep multi-source lookup chain (Wikipedia in 4 languages,
-        full extracts, Wiktionary, Wikiquote, then merged web search
-        with a deep read of the top result)."""
+        the deep multi-source lookup chain (Kenya factbase, Wikipedia in
+        12 languages, full extracts, Wiktionary, Wikiquote, Wikidata,
+        then merged web search with a deep read of the top result)."""
         result = self.lookup(query)
         if "error" in result:
             # maybe no network or no article - say so gracefully

@@ -771,6 +771,32 @@ class ChatBot:
             self._handle_look_up,
         )
         e.register(
+            "kenya_fact_qa",
+            [r"\bwho (?:is|was|are)\b.*\bgovernor\b",
+             r"\bwho (?:is|was|are)\b.*\bgoverns\b",
+             r"\bgovernor of\b",
+             r"\bgoverns\b",
+             r"\bwho (?:is|was|are)\b.*?\b(?:president|chief justice|"
+             r"deputy president|vice president|speaker)\b",
+             r"\bcapital of\b",
+             r"\bwhich county (?:is|has)\b",
+             r"\bwhat county (?:is|has)\b",
+             r"\bhow many counties\b",
+             r"\bcount(?:ies|y)s?\s+(?:of|in)\s+kenya\b",
+             r"\bkaunti\s+(?:zote|ngapi|majina)\b",
+             r"\b(?:orodha ya|majina ya)\s+kaunti\b",
+             r"\b(?:list|name|all|who are)\b.*\bgovernors?\b",
+             r"\bwhere is\s+(?!my\b)([a-z][a-z0-9' .\-]{1,40})\s*$"],
+            self._handle_kenya_fact_qa,
+        )
+        e.register(
+            "facts_list",
+            [r"\b(\d+)\s+facts?\s+(?:about|on)\s+.+",
+             r"\bfacts?\s+(?:about|on)\s+.+",
+             r"\btell me\s+\d+\s+things about\s+.+"],
+            self._handle_facts_list,
+        )
+        e.register(
             "browser_screenshot",
             [r"\b(?:screenshot|snap|show me) (?:of |the page )?(.+\.\S+)"],
             self._handle_browser_screenshot,
@@ -3132,26 +3158,41 @@ class ChatBot:
               "what's in the news"        -> top headlines (Hacker News)
               "define: serendipity"       -> real dictionary lookup
 
-            WEB LOOKUP & BROWSING (need internet; fail closed if offline)
+WEB LOOKUP & BROWSING (need internet; fail closed if offline)
               "look up elephant"          -> deep multi-source lookup (no API
-                                             keys), Kenya-centralized: an
-                                             instant offline Kenya factbase
-                                             (country, towns/counties, heroes,
-                                             presidents, schools, universities,
-                                             landmarks), Swahili-first Wikipedia
-                                             for Kenyan topics, Wikipedia in 4
-                                             languages (simple/en/sw/fr),
-                                             full-article extracts, Wiktionary
-                                             (en + Swahili edition), Wikiquote,
-                                             OpenStreetMap place lookup
-                                             (Kenya-first), then a merged
-                                             DuckDuckGo + Bing web search with
-                                             recent Kenyan-flavoured Google
-                                             News that deep-reads up to two
-                                             result pages - so local schools,
-                                             clubs, products and news all get
-                                             real answers
+                                              keys), Kenya-centralized: an
+                                              instant offline Kenya factbase
+                                              (country, towns/counties, heroes,
+                                              presidents, schools, universities,
+                                              landmarks), Swahili-first Wikipedia
+                                              for Kenyan topics, Wikipedia in 12
+                                              languages (simple/en/sw/fr/de/es/
+                                              pt/zh/hi/ar/ru/ja) widening global
+                                              recall, full-article extracts,
+                                              Wiktionary (en + Swahili edition),
+                                              Wikiquote, Wikidata structured
+                                              facts (population, born, country),
+                                              OpenStreetMap place lookup
+                                              (Kenya-first), then a merged
+                                              DuckDuckGo + Bing web search with
+                                              recent Google News that boosts
+                                              Kenyan outlets (Nation, Citizen,
+                                              Standard, BBC Africa) and
+                                              deep-reads up to two result pages
+                                              - so local schools, clubs,
+                                              products and news all get real
+                                              answers
               "look up nakuru county"     -> off the Kenya factbase (instant)
+              "who is the governor of busia" -> instant Kenya Q&A from the
+                                              factbase - governors (all 47
+                                              counties), "who is the president",
+                                              "who's the chief justice", "what
+                                              is the capital of X", "which
+                                              county is X in", "where is X"
+              "5 facts about nairobi"     -> bulleted fact lists (counties get
+                                              structured profiles); try "facts
+                                              about kenya", "kaunti zote za
+                                              kenya" (the 47 counties)
               "look up heri"              -> Swahili/French phrases answered
                                              via a hand-verified dictionary
               "search the web for ai"     -> same lookup, loose phrasing
@@ -4145,6 +4186,37 @@ class ChatBot:
         if not topic:
             return "What would you like me to look up?"
         return self.web_reader.format_lookup(topic)
+
+    def _handle_kenya_fact_qa(self, text, m):
+        """Instant Kenya Q&A ('who is the governor of busia', 'capital
+        of nakuru', 'which county is kitale in') straight from the
+        offline county profiles; anything else flows to the normal
+        lookup chain."""
+        result = self.web_reader.kenya_fact_qa(text)
+        if result and "extract" in result:
+            return (f"{result['title']}\n\n{result['extract']}\n\n"
+                    f"(Source: {result['source']} - {result['url']})")
+        topic = re.sub(
+            r"^(?:who (?:is|was|are)|who's|what(?: is|'s)?|"
+            r"where (?:is|are)|tell me who)\s+",
+            "", text, flags=re.IGNORECASE).strip().strip("?").strip()
+        return self.web_reader.format_lookup(topic or text)
+
+    def _handle_facts_list(self, text, m):
+        """'10 facts about X' / 'facts about X' - bulleted fact lists
+        from the Kenya factbase (counties get structured profiles),
+        falling back to a normal lookup for unknown topics."""
+        count = 5
+        mm = re.search(r"(\d+)\s+facts\b", text)
+        if mm:
+            count = int(mm.group(1))
+        topic = re.sub(
+            r"^(?:tell me |please |can you |give me |i want )*\s*"
+            r"(?:\d+\s+)?facts?\s+(?:about|on)\s+",
+            "", text, flags=re.IGNORECASE).strip()
+        if not topic:
+            return "What would you like the facts about?"
+        return self.web_reader.format_facts(topic, count)
 
     def _handle_browser_screenshot(self, text, m):
         """Headless-browser screenshot (Section 13C). Returns the
