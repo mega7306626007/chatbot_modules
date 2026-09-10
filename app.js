@@ -89,15 +89,30 @@ document.querySelectorAll('[data-fill]').forEach((button) => {
 
 const scrollUp = document.querySelector('#scroll-up');
 const scrollDown = document.querySelector('#scroll-down');
-scrollUp?.addEventListener('click', () => conversation.scrollTo({ top: 0, behavior: 'smooth' }));
-scrollDown?.addEventListener('click', () => conversation.scrollTo({ top: conversation.scrollHeight, behavior: 'smooth' }));
-// hide/show based on scroll position (optional polish — never fully hidden, just dimmed at limits)
+function goToTop() {
+  try { conversation?.scrollTo({ top: 0, behavior: 'smooth' }); } catch { if (conversation) conversation.scrollTop = 0; }
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+  try { document.documentElement?.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+  if (conversation) conversation.scrollTop = 0;
+}
+function goToBottom() {
+  const top = conversation ? conversation.scrollHeight : document.documentElement.scrollHeight;
+  try { conversation?.scrollTo({ top, behavior: 'smooth' }); } catch { if (conversation) conversation.scrollTop = top; }
+  try { window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }); } catch {}
+  try { document.documentElement?.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }); } catch {}
+  if (conversation) conversation.scrollTop = conversation.scrollHeight;
+}
+scrollUp?.addEventListener('click', goToTop);
+scrollDown?.addEventListener('click', goToBottom);
+// keep buttons always visible at their fixed corners (per request: Go to bottom at top, Go to top at bottom)
+// dim only slightly at limits, never hide
 function updateScrollButtons() {
-  if (!conversation) return;
-  const atTop = conversation.scrollTop <= 10;
+  if (!conversation || !scrollUp || !scrollDown) return;
+  const atTop = conversation.scrollTop <= 10 && window.scrollY <= 10;
   const atBottom = conversation.scrollTop + conversation.clientHeight >= conversation.scrollHeight - 10;
-  if (scrollUp) scrollUp.style.opacity = atTop ? '0.45' : '0.92';
-  if (scrollDown) scrollDown.style.opacity = atBottom ? '0.45' : '0.92';
+  scrollUp.style.opacity = atTop ? '0.55' : '0.92';
+  scrollDown.style.opacity = atBottom ? '0.55' : '0.92';
 }
 conversation?.addEventListener('scroll', updateScrollButtons);
+window.addEventListener('scroll', updateScrollButtons);
 updateScrollButtons();
