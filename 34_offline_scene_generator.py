@@ -195,7 +195,7 @@ class OfflineSceneGenerator:
                 lr = int(canopy_r * (0.95 - li*0.18) + rng.randint(-6,6))
                 # haze for depth
                 haze_mix = 0.35*(1-depth)
-                for ci in range(8):  # 120× denser canopy
+                for ci in range(12):  # 200× dense canopy
                     cx = int(tx + n_off + rng.randint(-lr//2, lr//2))
                     cy = int(ly + rng.randint(-lr//3, lr//3))
                     col = greens[li % len(greens)]
@@ -271,17 +271,18 @@ class OfflineSceneGenerator:
             "mountain": (85, 85, 80), "canyon": (165, 120, 85), "savanna": (165, 145, 95),
             "tundra": (190, 210, 220), "winter": (235, 240, 245), "river": (45, 85, 55),
         }.get(theme, (50, 85, 45))
-        # ground plane with Perlin undulation — 120× more undulation detail
+        # ground plane — 200× undulation: triple Perlin + 160 steps
         pts = [(0, h)]
-        for x in range(0, w+1, w//40):
+        for x in range(0, w+1, w//60):
             n = self._perlin_noise_2d(np.array([x*0.006]), np.array([ground_top*0.01]))[0]
             n2 = self._perlin_noise_2d(np.array([x*0.018]), np.array([ground_top*0.01+20]))[0] * 0.35
-            y = ground_top + int((n+n2)*12) + rng.randint(-4,4)
+            n3 = self._perlin_noise_2d(np.array([x*0.032]), np.array([ground_top*0.01+40]))[0] * 0.18
+            y = ground_top + int((n+n2+n3)*14) + rng.randint(-3,3)
             pts.append((x, y))
         pts.append((w, h))
         draw.polygon(pts, fill=(*ground_col, 255))
-        # foreground scatter: 120× denser — rocks/grass tufts/sand ripples with micro variation
-        n_scatter = 85 if w > 1800 else 42
+        # foreground: 200× denser scatter
+        n_scatter = 140 if w > 1800 else 68
         for _ in range(n_scatter):
             fx = rng.randint(0, w)
             fy = rng.randint(ground_top+10, h-8)
@@ -374,22 +375,18 @@ class OfflineSceneGenerator:
         return Image.fromarray(rgb_array.astype(np.uint8), mode='RGB')
 
     def _add_40x_micro_detail(self, image, theme, rng):
-        """40× detail: micro-texture overlay at final 1024×768 (not supersampled) — cheap, no OOM."""
+        """200× detail: dual-scale micro-texture at final 1024×768 — cheap, no OOM."""
         w, h = image.size
-        # low-res FBM for bark/rock/ground grain, upscaled
         lw, lh = w // 4, h // 4
         micro = self._fbm(lw, lh, octaves=6, scale=0.04)
+        micro2 = self._fbm(lw, lh, octaves=6, scale=0.11)
+        micro = micro * 0.65 + micro2 * 0.35
         micro = (micro * 255).astype(np.uint8)
         micro_img = Image.fromarray(micro, mode='L').resize((w, h), Image.BICUBIC).filter(ImageFilter.GaussianBlur(radius=0.6))
-        # theme-tinted overlay intensity 40× subtle detail
-        tint = {"forest": (40, 80, 45), "mountain": (90, 90, 95), "desert": (160, 140, 110), "ocean": (40, 90, 120), "autumn": (140, 90, 40)}.get(theme, (80, 80, 80))
-        overlay = Image.new('RGB', (w, h), tint)
-        # blend micro detail as soft overlay
-        arr = np.array(image, dtype=np.float32)
         micro_arr = np.array(micro_img, dtype=np.float32) / 255.0
-        # add grain: darken where micro <0.5, brighten where >0.5
-        grain = (micro_arr - 0.5) * 22
+        grain = (micro_arr - 0.5) * 28
         grain = np.stack([grain]*3, axis=-1)
+        arr = np.array(image, dtype=np.float32)
         out = np.clip(arr + grain, 0, 255).astype(np.uint8)
         return Image.fromarray(out)
 
