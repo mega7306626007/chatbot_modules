@@ -1,0 +1,10 @@
+{
+  "appId": "com.mwesh.pychat",
+  "appName": "Mwesh",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://pychat-mvp.onrender.com",
+    "cleartext": false
+  }
+}

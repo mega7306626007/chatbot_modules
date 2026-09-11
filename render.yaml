@@ -6,3 +6,11 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py --web
     healthCheckPath: /
+  - type: web
+    name: pychat-mvp
+    runtime: python
+    plan: free
+    branch: mvp
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py --web
+    healthCheckPath: /
