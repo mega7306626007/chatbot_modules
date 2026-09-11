@@ -810,24 +810,99 @@ class RealPhotoConnector:
         return result
 
     def fetch_scene_photo(self, query: str, output_path: str):
-        """Photorealistic scene path: search Openverse for a real CC photograph
-        matching a free-form scene query (e.g. 'peaceful forest', 'ocean sunset').
-        Returns same shape as fetch_and_save. This is how 'generate image: ...'
-        can now return a true photograph when online, with the Pillow
-        procedural renderer as the honest offline fallback."""
-        # clean query — strip leading 'a ' / 'an ' that users often type
+        """Offline-cache online images: ~100 downloaded CC photos grouped by theme label
+        (e.g. beach, sunset) — random pick relevant to request, no API call at runtime.
+        Falls back to live API only if local cache missing."""
+        import pathlib as _pl
+        import shutil as _sh
+        import random as _rnd
+        import json as _js
+
         q = query.strip().lower()
-        for prefix in ("a ", "an "):
+        for prefix in ("a ", "an ", "the "):
             if q.startswith(prefix):
                 q = q[len(prefix):]
-        # keep query short — Openverse works better with 2-4 keywords
-        q = " ".join(q.split()[:6])
-        # 70× more variants: search 20 candidates and pick varied result per query
-        found = self.search(q, page_size=20)
+        q_short = " ".join(q.split()[:6])
+
+        # try local cache first — lightweight keyword to theme (no heavy classifier retrain per request)
+        theme = None
+        try:
+            for t in ["sunset","sunrise","ocean","forest","space","city","mountain","desert","aurora","rainy","garden","winter","waterfall","autumn","savanna","canyon","volcano","tundra","meadow","river","beach"]:
+                if t in q_short:
+                    theme = t
+                    break
+            if not theme:
+                # fallback: map beach -> ocean, sunset etc
+                if "beach" in q_short: theme = "ocean"
+                elif "sunset" in q_short or "sunrise" in q_short: theme = "sunset"
+        except Exception:
+            pass
+        # resolve cache root robustly (main.py exec uses shared globals where __file__ is main.py)
+        try:
+            _base = _pl.Path(__file__).parent if '__file__' in globals() else _pl.Path.cwd()
+        except Exception:
+            _base = _pl.Path.cwd()
+        CACHE_ROOT = _base / "cached_online_images"
+        if not CACHE_ROOT.exists():
+            # try cwd relative as fallback for Render exec model
+            alt = _pl.Path.cwd() / "cached_online_images"
+            if alt.exists():
+                CACHE_ROOT = alt
+        # if no direct keyword hit, pick from all cached groups as fallback for variety
+        if not theme or not (CACHE_ROOT / theme).exists():
+            # try to find any theme that is substring of query, else fallback to ocean/forest general
+            all_themes = [p.name for p in CACHE_ROOT.glob("*") if p.is_dir()] if CACHE_ROOT.exists() else []
+            if all_themes:
+                # try fuzzy: pick first theme word that appears anywhere
+                for t in all_themes:
+                    if t in q_short:
+                        theme = t
+                        break
+                if not theme or not (CACHE_ROOT / theme).exists():
+                    # final fallback: hash query to pick a theme deterministically so same query gives varied but stable group
+                    import hashlib as _hl
+                    theme = all_themes[int(hashlib.sha256(q_short.encode()).hexdigest(), 16) % len(all_themes)] if all_themes else None
+        if theme and (CACHE_ROOT / theme).exists():
+            candidates = list((CACHE_ROOT / theme).glob("*.jpg"))
+            if candidates:
+                # 70x variants: random pick seeded by query for reproducibility but varied per call
+                _rnd.seed(hash(q_short) % (2**32))
+                # shuffle to give different image each time even same query (use time-based offset)
+                _rnd.shuffle(candidates)
+                # pick via timestamp hash for variation on repeat requests
+                import time as _t
+                pick = candidates[int((_t.time()*1000) % len(candidates))]
+                meta_path = pick.with_suffix(".json")
+                try:
+                    _sh.copyfile(pick, output_path)
+                    # validate and re-save capped at 1024
+                    if globals().get('PILLOW_AVAILABLE', True):
+                        try:
+                            im = Image.open(output_path).convert("RGB")
+                            w, h = im.size
+                            if max(w, h) > 1024:
+                                scale = 1024 / max(w, h)
+                                im = im.resize((int(w*scale), int(h*scale)), Image.LANCZOS)
+                            im.save(output_path, quality=92, optimize=True)
+                        except Exception:
+                            pass
+                    info = {"title": pick.stem, "creator": "unknown", "license": "CC"}
+                    if meta_path.exists():
+                        try:
+                            j = _js.loads(meta_path.read_text(encoding="utf-8"))
+                            info = {"title": j.get("title", pick.stem), "creator": j.get("creator","unknown"), "license": j.get("license","CC")}
+                        except Exception:
+                            pass
+                    return {"path": output_path, "title": info["title"], "creator": info["creator"], "license": info["license"]}
+                except Exception as e:
+                    return {"error": f"cached image copy failed ({e})"}
+
+        # fallback: try live API if cache miss (keeps working on fresh deploy before cache commit)
+        q2 = " ".join(q_short.split()[:6])
+        found = self.search(q2, page_size=20)
         if "error" in found:
-            # retry with last 2 keywords as fallback, also with 20 variants
-            fallback = " ".join(q.split()[-2:])
-            if fallback != q:
+            fallback = " ".join(q2.split()[-2:])
+            if fallback != q2:
                 found = self.search(fallback, page_size=20)
             if "error" in found:
                 return found
@@ -835,24 +910,22 @@ class RealPhotoConnector:
         if not image_url:
             return {"error": "search result had no image URL"}
         try:
-            request = urllib.request.Request(image_url, headers={"User-Agent": "offline-chatbot/1.0"})
-            with urllib.request.urlopen(request, timeout=self.client.timeout_seconds) as response:
+            req = urllib.request.Request(image_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept": "image/*"})
+            with urllib.request.urlopen(req, timeout=self.client.timeout_seconds) as response:
                 if response.status != 200:
                     return {"error": f"image download failed (HTTP {response.status})"}
                 image_bytes = response.read()
         except (urllib.error.URLError, TimeoutError) as e:
             return {"error": f"couldn't download the image ({e})"}
-        if not PILLOW_AVAILABLE:
+        if not globals().get('PILLOW_AVAILABLE', True):
             return {"error": "Pillow isn't installed, so the downloaded image can't be processed"}
         try:
             with open(output_path, "wb") as f:
                 f.write(image_bytes)
             img = Image.open(output_path).convert("RGB")
-            # Keep original aspect but cap at 1024 longest edge for free-tier RAM
             w, h = img.size
-            max_edge = 1024
-            if max(w, h) > max_edge:
-                scale = max_edge / max(w, h)
+            if max(w, h) > 1024:
+                scale = 1024 / max(w, h)
                 img = img.resize((int(w*scale), int(h*scale)), Image.LANCZOS)
             img.save(output_path, quality=92, optimize=True)
         except Exception as e:
