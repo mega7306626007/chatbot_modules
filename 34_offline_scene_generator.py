@@ -660,20 +660,21 @@ class OfflineSceneGenerator:
         except Exception:
             pass
 
-        # 6. Cinematic grading + HDR bloom + micro-contrast + haze + grain (130%+ even better finish)
+        # 6. Cinematic grading + HDR bloom + micro-contrast + haze + grain — make better overall
         image = self._color_grade(image, theme)
         try:
-            image = image.filter(ImageFilter.UnsharpMask(radius=1.8, percent=120, threshold=1))
-            image = ImageEnhance.Color(image).enhance(1.12)
-            image = ImageEnhance.Contrast(image).enhance(1.10)
+            image = image.filter(ImageFilter.UnsharpMask(radius=2.0, percent=130, threshold=1))
+            image = ImageEnhance.Color(image).enhance(1.14)
+            image = ImageEnhance.Contrast(image).enhance(1.12)
+            image = ImageEnhance.Brightness(image).enhance(1.02)
             arr = np.array(image).astype(np.float32)
-            bright = np.clip((arr - 182) / 73.0, 0, 1)
-            bright_img = Image.fromarray((bright * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=3.0))
-            image = Image.blend(image, Image.blend(image, bright_img, 0.55), 0.22)
+            bright = np.clip((arr - 180) / 70.0, 0, 1)
+            bright_img = Image.fromarray((bright * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=3.2))
+            image = Image.blend(image, Image.blend(image, bright_img, 0.58), 0.24)
             detail = image.filter(ImageFilter.DETAIL)
-            image = Image.blend(image, detail, 0.16)
+            image = Image.blend(image, detail, 0.18)
             haze = Image.new('RGB', image.size, (210, 225, 235))
-            image = Image.blend(image, haze, 0.04)
+            image = Image.blend(image, haze, 0.035)
             grain = (np.random.RandomState((hash(prompt) % (2**32))).randn(image.size[1], image.size[0], 3) * 4).astype(np.float32)
             g_arr = np.array(image).astype(np.float32) + grain
             image = Image.fromarray(np.clip(g_arr, 0, 255).astype(np.uint8))
