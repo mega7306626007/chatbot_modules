@@ -4629,6 +4629,16 @@ WEB LOOKUP & BROWSING (need internet; fail closed if offline)
         if not user_text:
             return "I didn't catch that - could you say something?"
 
+        # Online images (cached, no API) must be checked BEFORE scene_cues,
+        # otherwise "online image: peaceful forest" contains "forest" and would be hijacked to offline.
+        online_m = re.search(r"\b(?:online image|online photo|real photo)\s*[:\s]+\s*(.+)", user_text, re.IGNORECASE)
+        if online_m:
+            return self._handle_online_scene_image(user_text, online_m)
+        # also catch "online image of X" without colon
+        online_m2 = re.search(r"\b(?:online image|online photo)\s+of\s+(.+)", user_text, re.IGNORECASE)
+        if online_m2:
+            return self._handle_online_scene_image(user_text, online_m2)
+
         scene_cues = (
             "background", "landscape", "scenery", "complex image", "scene", "wallpaper",
             "sunset", "sunrise", "dawn", "morning", "winter", "snow", "ice", "aurora",
