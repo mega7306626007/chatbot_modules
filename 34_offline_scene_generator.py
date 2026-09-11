@@ -195,7 +195,7 @@ class OfflineSceneGenerator:
                 lr = int(canopy_r * (0.95 - li*0.18) + rng.randint(-6,6))
                 # haze for depth
                 haze_mix = 0.35*(1-depth)
-                for ci in range(5):
+                for ci in range(8):  # 120× denser canopy
                     cx = int(tx + n_off + rng.randint(-lr//2, lr//2))
                     cy = int(ly + rng.randint(-lr//3, lr//3))
                     col = greens[li % len(greens)]
@@ -271,40 +271,43 @@ class OfflineSceneGenerator:
             "mountain": (85, 85, 80), "canyon": (165, 120, 85), "savanna": (165, 145, 95),
             "tundra": (190, 210, 220), "winter": (235, 240, 245), "river": (45, 85, 55),
         }.get(theme, (50, 85, 45))
-        # ground plane with Perlin undulation
+        # ground plane with Perlin undulation — 120× more undulation detail
         pts = [(0, h)]
-        for x in range(0, w+1, w//20):
+        for x in range(0, w+1, w//40):
             n = self._perlin_noise_2d(np.array([x*0.006]), np.array([ground_top*0.01]))[0]
-            y = ground_top + int(n*12) + rng.randint(-4,4)
+            n2 = self._perlin_noise_2d(np.array([x*0.018]), np.array([ground_top*0.01+20]))[0] * 0.35
+            y = ground_top + int((n+n2)*12) + rng.randint(-4,4)
             pts.append((x, y))
         pts.append((w, h))
         draw.polygon(pts, fill=(*ground_col, 255))
-        # foreground scatter: rocks/grass tufts/sand ripples
-        n_scatter = 28 if w > 1800 else 14
+        # foreground scatter: 120× denser — rocks/grass tufts/sand ripples with micro variation
+        n_scatter = 85 if w > 1800 else 42
         for _ in range(n_scatter):
             fx = rng.randint(0, w)
             fy = rng.randint(ground_top+10, h-8)
-            # scale with depth
             s = (fy - ground_top) / (h - ground_top)
             if theme in ("forest","garden","autumn","meadow","river"):
-                # grass tuft
-                for _ in range(3):
-                    gx = fx + rng.randint(-12,12)
-                    draw.line((gx, fy, gx + rng.randint(-4,4), fy - int(10+14*s)), fill=(60+rng.randint(0,40), 120+rng.randint(0,40), 50, 180), width=2)
+                for _ in range(5):
+                    gx = fx + rng.randint(-14,14)
+                    draw.line((gx, fy, gx + rng.randint(-5,5), fy - int(12+16*s)), fill=(55+rng.randint(0,45), 115+rng.randint(0,45), 45, 185), width=2)
+                    # small leaf speck
+                    if rng.random() > 0.6:
+                        draw.ellipse((gx-2, fy - int(8+12*s)-2, gx+2, fy - int(8+12*s)+2), fill=(70, 140, 60, 140))
             elif theme in ("desert","canyon","savanna"):
-                # rock
-                rw, rh = int(18+20*s), int(10+14*s)
-                col = (ground_col[0]-10, ground_col[1]-10, ground_col[2]-15)
-                draw.ellipse((fx - rw//2, fy - rh//2, fx + rw//2, fy + rh//2), fill=(*col, 210))
+                rw, rh = int(20+22*s), int(11+15*s)
+                col = (ground_col[0]-12, ground_col[1]-12, ground_col[2]-18)
+                draw.ellipse((fx - rw//2, fy - rh//2, fx + rw//2, fy + rh//2), fill=(*col, 215))
+                # highlight
+                draw.ellipse((fx - rw//3, fy - rh//3, fx - rw//6, fy - rh//4), fill=(ground_col[0]+10, ground_col[1]+10, ground_col[2]+5, 90))
             elif theme in ("ocean","beach"):
-                # sand ripple
-                draw.arc((fx-22, fy-6, fx+22, fy+6), 0, 180, fill=(255, 250, 235, 70), width=1)
+                draw.arc((fx-24, fy-7, fx+24, fy+7), 0, 180, fill=(255, 250, 235, 75), width=1)
+                if rng.random() > 0.7:
+                    draw.ellipse((fx-4, fy-2, fx+4, fy+2), fill=(255, 255, 255, 55))
             elif theme in ("winter","tundra"):
-                # snow sparkle
-                draw.ellipse((fx-3, fy-3, fx+3, fy+3), fill=(255,255,255, 180))
+                draw.ellipse((fx-4, fy-4, fx+4, fy+4), fill=(255,255,255, 190))
+                draw.ellipse((fx-1, fy-1, fx+1, fy+1), fill=(210,230,255, 120))
             else:
-                # generic pebble
-                draw.ellipse((fx-5, fy-4, fx+5, fy+4), fill=(ground_col[0]+15, ground_col[1]+15, ground_col[2]+15, 160))
+                draw.ellipse((fx-6, fy-5, fx+6, fy+5), fill=(ground_col[0]+18, ground_col[1]+18, ground_col[2]+18, 165))
 
     def _paint_city_skyline(self, image, w, h, rng):
         """Photorealistic city silhouette — varied building heights + window lights."""
