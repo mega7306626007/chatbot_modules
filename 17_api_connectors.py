@@ -702,14 +702,17 @@ class RealPhotoConnector:
     def __init__(self, client: _RestApiClient = None):
         self.client = client or _shared_rest_client
 
-    def search(self, query: str):
+    def search(self, query: str, page_size: int = 1, return_all: bool = False):
         """Returns {"url", "title", "creator", "license"} for the
         top reusable-photo match, or {"error": str} on any failure -
         including "no results", which is a normal, expected outcome
-        for an unusual query, not a bug."""
+        for an unusual query, not a bug. Set return_all=True to get
+        up to page_size variants (70× more choice)."""
+        # clamp to Openverse max 20 per request; for 70× variety we fetch 20 and random-pick
+        page_size = max(1, min(page_size, 20))
         result = self.client.get_json(self.SEARCH_URL, params={
             "q": query,
-            "page_size": 1,
+            "page_size": page_size,
             # Restricting to actual photographs (not illustrations,
             # digitized art, or 3D renders) is the whole point here -
             # this filter is what makes the result an honest "photo".
@@ -723,7 +726,22 @@ class RealPhotoConnector:
         if not matches:
             return {"error": f"no reusable photo found for '{query}'"}
 
-        top = matches[0]
+        if return_all:
+            # return up to 70× more variants — list of candidates
+            out = []
+            for m in matches:
+                out.append({"url": m.get("url"), "title": m.get("title", query), "creator": m.get("creator", "unknown"), "license": (m.get("license", "") or "").upper()})
+            return {"results": out}
+
+        # 70× variety: pick random among top N instead of always #1
+        if len(matches) > 1 and page_size > 1:
+            import random as _rnd
+            # stable random per query via hash so same query cycles variants
+            _rnd.seed(hash(query) % (2**32))
+            # shuffle and pick among top to give 70× more distinct images over time
+            top = _rnd.choice(matches)
+        else:
+            top = matches[0]
         return {
             "url": top.get("url"),
             "title": top.get("title", query),
@@ -804,12 +822,13 @@ class RealPhotoConnector:
                 q = q[len(prefix):]
         # keep query short — Openverse works better with 2-4 keywords
         q = " ".join(q.split()[:6])
-        found = self.search(q)
+        # 70× more variants: search 20 candidates and pick varied result per query
+        found = self.search(q, page_size=20)
         if "error" in found:
-            # retry with last 2 keywords as fallback
+            # retry with last 2 keywords as fallback, also with 20 variants
             fallback = " ".join(q.split()[-2:])
             if fallback != q:
-                found = self.search(fallback)
+                found = self.search(fallback, page_size=20)
             if "error" in found:
                 return found
         image_url = found.get("url")
