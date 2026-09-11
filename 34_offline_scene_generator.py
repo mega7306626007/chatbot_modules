@@ -215,7 +215,7 @@ class OfflineSceneGenerator:
                     draw.ellipse((cx - lr//4, cy - lr//6, cx + lr//6, cy - lr//8), fill=(*hl, 80))
 
     def _paint_photoreal_water(self, image, theme, w, h, rng):
-        """Photorealistic water — fixed: ocean/beach now has true turquoise shallow, deep offshore, soft foam, not blotchy islands."""
+        """Photorealistic water — beach/ocean realistic blend, wavy boundaries, perspective."""
         if theme not in ("ocean","river","waterfall","mountain","winter","canyon","meadow","beach"):
             if "beach" in theme or "ocean" in theme:
                 pass
@@ -236,62 +236,54 @@ class OfflineSceneGenerator:
             deep, shallow = (22, 65, 90), (60, 130, 150)
         elif is_beach:
             deep, shallow = (12, 55, 118), (48, 155, 175)
-        # smooth gradient: deep at horizon, shallow at sand
         water_arr = np.zeros((h - water_top, w, 3), dtype=np.uint8)
         for y in range(h - water_top):
-            t = y / max(h - water_top - 1, 1)
-            nt = np.clip(t + self._perlin_noise_2d(np.array([y*0.06]), np.array([0.0]))[0]*0.03, 0, 1)
-            # fix: t=0 top (deep), t=1 bottom (shallow) — previously inverted for beach
+            t = y / max(h - water_top -1,1)
+            nt = max(0, min(1, t + self._perlin_noise_2d(np.array([y*0.06]), np.array([0.0]))[0]*0.03))
             r = int(deep[0]*(1-nt) + shallow[0]*nt)
             g = int(deep[1]*(1-nt) + shallow[1]*nt)
             b = int(deep[2]*(1-nt) + shallow[2]*nt)
             water_arr[y, :] = (r,g,b)
-        # subtle horizontal wave texture (not blotchy islands): sine + Perlin wobble
+        for y in range(h - water_top):
+            depth = 1 - y / max(h - water_top -1,1)
+            haz = depth * 0.18
+            r,g,b = water_arr[y,0]
+            water_arr[y, :] = (int(r*(1-haz)+180*haz), int(g*(1-haz)+200*haz), int(b*(1-haz)+220*haz))
         lw, lh = w // 4, (h - water_top) // 8
         wave = self._fbm(lw, lh, octaves=3, scale=0.025)
         wave_img = Image.fromarray(((wave)*140).astype(np.uint8), mode='L').resize((w, h - water_top), Image.BICUBIC)
         spec_layer = Image.new('RGBA', (w, h - water_top), (255, 255, 255, 0))
-        spec_layer.putalpha(Image.fromarray(np.array(wave_img, dtype=np.uint8) // 3))
-        # sky reflection subtle
+        spec_layer.putalpha(Image.fromarray((np.array(wave_img, dtype=np.uint8) // 3)))
         sky_strip = image.crop((0, max(0, water_top - int(h*0.16)), w, water_top)).resize((w, h - water_top), Image.BICUBIC)
         sky_strip = sky_strip.transpose(Image.FLIP_TOP_BOTTOM).filter(ImageFilter.GaussianBlur(radius=2))
         water_img = Image.fromarray(water_arr, 'RGB').convert('RGBA')
         water_img = Image.alpha_composite(water_img, Image.blend(Image.new('RGBA', water_img.size, (0,0,0,0)), sky_strip.convert('RGBA'), 0.12))
         water_img = Image.alpha_composite(water_img, spec_layer)
-        # horizon soft line (not hard)
-        draw_water = ImageDraw.Draw(water_img)
-        draw_water.line((0, 0, w, 0), fill=(255, 250, 240, 60), width=1)
-        # beach blend: wet sand gradient + single wobbly foam line
+        for x in range(0, w, 4):
+            n = self._perlin_noise_2d(np.array([x*0.008]), np.array([0]))[0]
+            hy = int(n*3)
+            draw_w = ImageDraw.Draw(water_img)
+            draw_w.line((x, hy, x+4, hy), fill=(255, 250, 240, 45), width=1)
         if is_beach:
             sand_start = (h - water_top) - beach_h
             for y in range(sand_start, h - water_top):
                 t = (y - sand_start) / max(beach_h, 1)
                 sand_col = np.array([215, 200, 172], dtype=np.float32)
                 water_col = np.array(shallow, dtype=np.float32)
-                blend = np.clip(t*1.4, 0, 1)
-                r, g, b = (sand_col*(1-blend) + water_col*blend).astype(int)
-                n = self._perlin_noise_2d(np.array([y*0.18]), np.array([0.0]))[0] * 5
-                r = np.clip(r + n, 0, 255).astype(int)
-                water_arr[y, :] = (r, g, b)
-            # re-create after sand
+                blend = min(max(t*1.4, 0), 1)
+                r,g,b = (sand_col*(1-blend) + water_col*blend).astype(int)
+                n = self._perlin_noise_2d(np.array([y*0.18]), np.array([0.0]))[0] *5
+                r = int(max(0, min(255, r + n)))
+                water_arr[y, :] = (r,g,b)
             water_img = Image.fromarray(water_arr, 'RGB').convert('RGBA')
             water_img = Image.alpha_composite(water_img, spec_layer)
-            # single foam line at wet sand edge with Perlin wobble
             foam_y = sand_start
             for x in range(0, w, 6):
                 n = self._perlin_noise_2d(np.array([x*0.012]), np.array([foam_y*0.015]))[0]
                 fy = foam_y + int(n*4)
                 fx = x + int(n*3)
-                draw_water = ImageDraw.Draw(water_img)
-                draw_water.ellipse((fx-10, fy-2, fx+10, fy+2), fill=(255, 250, 240, 85))
-            foam_y = sand_start
-            for x in range(0, w, 3):
-                n = self._perlin_noise_2d(np.array([x*0.015]), np.array([foam_y*0.02]))[0]
-                fw = int(18 + n*8)
-                fh = int(4 + n*3)
-                draw_water.ellipse((x - fw//2, foam_y - fh//2, x + fw//2, foam_y + fh//2), fill=(255, 250, 240, 160))
-            # re-create water_img with beach-corrected arr
-            water_img = Image.fromarray(water_arr, 'RGB').convert('RGBA')
+                draw_w = ImageDraw.Draw(water_img)
+                draw_w.ellipse((fx-10, fy-2, fx+10, fy+2), fill=(255, 250, 240, 85))
         image.paste(water_img, (0, water_top), mask=water_img.split()[3] if water_img.mode == 'RGBA' else None)
 
     def _paint_foreground_focus(self, image, theme, w, h, rng):
