@@ -324,6 +324,26 @@ class OfflineSceneGenerator:
         rgb_array = c_inner * (1.0 - factor) + c_outer * factor
         return Image.fromarray(rgb_array.astype(np.uint8), mode='RGB')
 
+    def _add_40x_micro_detail(self, image, theme, rng):
+        """40× detail: micro-texture overlay at final 1024×768 (not supersampled) — cheap, no OOM."""
+        w, h = image.size
+        # low-res FBM for bark/rock/ground grain, upscaled
+        lw, lh = w // 4, h // 4
+        micro = self._fbm(lw, lh, octaves=6, scale=0.04)
+        micro = (micro * 255).astype(np.uint8)
+        micro_img = Image.fromarray(micro, mode='L').resize((w, h), Image.BICUBIC).filter(ImageFilter.GaussianBlur(radius=0.6))
+        # theme-tinted overlay intensity 40× subtle detail
+        tint = {"forest": (40, 80, 45), "mountain": (90, 90, 95), "desert": (160, 140, 110), "ocean": (40, 90, 120), "autumn": (140, 90, 40)}.get(theme, (80, 80, 80))
+        overlay = Image.new('RGB', (w, h), tint)
+        # blend micro detail as soft overlay
+        arr = np.array(image, dtype=np.float32)
+        micro_arr = np.array(micro_img, dtype=np.float32) / 255.0
+        # add grain: darken where micro <0.5, brighten where >0.5
+        grain = (micro_arr - 0.5) * 22
+        grain = np.stack([grain]*3, axis=-1)
+        out = np.clip(arr + grain, 0, 255).astype(np.uint8)
+        return Image.fromarray(out)
+
     def classify_prompt(self, prompt: str) -> str:
         normalized = prompt.lower().replace("nighttime", "night").replace("snow-covered", "snow covered")
         aliases = {
@@ -492,8 +512,14 @@ class OfflineSceneGenerator:
         except Exception:
             pass
 
-        # 5. Downscale 3× with LANCZOS for flawless anti-aliasing
+        # 5. Downscale 2× with LANCZOS for flawless anti-aliasing
         image = sky.resize(self.SIZE, Image.Resampling.LANCZOS)
+
+        # 5b. 40× micro-detail overlay at final size (cheap, no supersample OOM)
+        try:
+            image = self._add_40x_micro_detail(image, theme, rng)
+        except Exception:
+            pass
 
         # 6. Cinematic grading + HDR bloom + micro-contrast + haze + grain (130%+ even better finish)
         image = self._color_grade(image, theme)
