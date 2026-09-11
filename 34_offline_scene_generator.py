@@ -18,7 +18,7 @@ class OfflineSceneGenerator:
         "autumn", "savanna", "canyon", "volcano", "tundra", "meadow", "river",
     )
     SIZE = (1024, 768)
-    SUPER_SAMPLE = 3  # 3x Ultra Super-Sampling for flawless anti-aliased edge smoothing
+    SUPER_SAMPLE = 2  # balanced 2x supersample for Render free tier (3x OOMs at 502)
 
     TRAINING_EXAMPLES = {
         "sunset": ("golden hour", "warm evening sky", "orange sun over hills", "pink dusk", "twilight landscape", "burning sunset clouds", "amber horizon", "crimson dusk"),
@@ -114,9 +114,8 @@ class OfflineSceneGenerator:
         return self._noise_cache[key]
 
     def _paint_realistic_clouds(self, image, theme, w, h, rng):
-        """Paints high-fidelity volumetric mist layers — optimized: low-res FBM then upscaled (keeps 3× supersample fast)."""
+        """Paints volumetric mist — balanced detail keeps Render stable."""
         density = {"sunset": 0.4, "sunrise": 0.35, "rainy": 0.7, "ocean": 0.42, "forest": 0.30, "mountain": 0.32, "desert": 0.15, "aurora": 0.18, "winter": 0.35, "waterfall": 0.38, "autumn": 0.28, "savanna": 0.25, "canyon": 0.20, "volcano": 0.30, "tundra": 0.32, "meadow": 0.30, "river": 0.32}.get(theme, 0.30)
-        # For 3× supersample (3072×2304) generate at 1/3 res then upscale — 9× fewer pixels, visually identical after blur
         if w > 1800 or h > 1400:
             lw, lh = w // 3, h // 3
             noise_mask = self._fbm(lw, lh, octaves=5, scale=0.009)
@@ -134,7 +133,7 @@ class OfflineSceneGenerator:
         image.paste(cloud_layer, (0, 0), mask=alpha_channel)
 
     def _paint_mountain_ridges(self, image, w, h, sky_bottom_color, rng):
-        """Draws realistic, layered, cascading mountain silhouettes."""
+        """Draws layered mountains — 4 layers, stable for Render."""
         draw = ImageDraw.Draw(image, "RGBA")
         num_layers = 4
         for layer in range(num_layers):
@@ -163,7 +162,7 @@ class OfflineSceneGenerator:
             "waterfall": [(35, 95, 50), (50, 125, 65), (70, 155, 85), (25, 70, 40)],
         }
         greens = palettes.get(theme, palettes["forest"])
-        num = 18 if w > 2000 else 10
+        num = 18 if w > 1800 else 9  # balanced — 32 OOMs
         # depth sorted far to near
         trees = []
         for _ in range(num):
@@ -234,9 +233,8 @@ class OfflineSceneGenerator:
             g = int(deep[1]*(1-nt) + shallow[1]*nt)
             b = int(deep[2]*(1-nt) + shallow[2]*nt)
             water_arr[y, :] = (r,g,b)
-        # add FBM wave texture overlay (specular)
         lw, lh = w // 4, (h - water_top) // 4
-        wave = self._fbm(lw, lh, octaves=4, scale=0.02)
+        wave = self._fbm(lw, lh, octaves=5, scale=0.02)
         wave = (wave - 0.5) * 2.0  # -1 to 1
         wave_img = Image.fromarray(((wave + 1)*127).astype(np.uint8), mode='L').resize((w, h - water_top), Image.BICUBIC)
         wave_arr = np.array(wave_img, dtype=np.float32) / 255.0
