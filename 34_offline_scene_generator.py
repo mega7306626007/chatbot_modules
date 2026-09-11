@@ -150,6 +150,118 @@ class OfflineSceneGenerator:
             final_rgb = (base_mountain * (1.0 - sky_mix) + np.array(sky_bottom_color) * sky_mix).astype(np.uint8)
             draw.polygon(points, fill=(*final_rgb, 255))
 
+    def _paint_photoreal_trees(self, image, theme, w, h, rng):
+        """Photorealistic trees — fractal trunks + layered canopy clusters with depth haze, replaces pathetic flat triangles."""
+        if theme not in ("forest","garden","autumn","meadow","river","waterfall","mountain","savanna","tundra"):
+            return
+        draw = ImageDraw.Draw(image, "RGBA")
+        # theme palettes
+        palettes = {
+            "autumn": [(180, 60, 30), (200, 90, 40), (210, 140, 50), (160, 50, 30)],
+            "forest": [(30, 80, 40), (45, 110, 55), (60, 140, 70), (20, 60, 30)],
+            "garden": [(50, 120, 60), (70, 150, 80), (90, 170, 95), (35, 90, 45)],
+            "waterfall": [(35, 95, 50), (50, 125, 65), (70, 155, 85), (25, 70, 40)],
+        }
+        greens = palettes.get(theme, palettes["forest"])
+        num = 18 if w > 2000 else 10
+        # depth sorted far to near
+        trees = []
+        for _ in range(num):
+            tx = rng.randint(int(w*0.05), int(w*0.95))
+            base_y = rng.randint(int(h*0.62), int(h*0.96))
+            depth = (base_y - int(h*0.62)) / (h*0.34)  # 0 far, 1 near
+            scale = 0.55 + depth*0.9 + rng.uniform(-0.15, 0.15)
+            trees.append((base_y, tx, scale, depth))
+        trees.sort()  # far first
+        for base_y, tx, scale, depth in trees:
+            trunk_w = int(10*scale + 6)
+            trunk_h = int(80*scale + 40)
+            top_y = base_y - trunk_h
+            # bark with vertical gradient
+            bark_dark, bark_light = (55, 35, 20), (90, 65, 40)
+            for i in range(trunk_w):
+                t = i / max(trunk_w-1,1)
+                r = int(bark_dark[0]*(1-t)+bark_light[0]*t)
+                g = int(bark_dark[1]*(1-t)+bark_light[1]*t)
+                b = int(bark_dark[2]*(1-t)+bark_light[2]*t)
+                a = 200 if depth > 0.5 else 150
+                draw.line((tx - trunk_w//2 + i, base_y, tx - trunk_w//2 + i, top_y), fill=(r,g,b,a))
+            # canopy: 3 layers of overlapping ellipses with noise-distorted positions
+            canopy_r = int(70*scale + 30)
+            # use Perlin for leaf clump offset
+            n_off = self._perlin_noise_2d(np.array([tx*0.01]), np.array([base_y*0.01]))[0] * 12
+            layers = 3 if depth > 0.6 else 2
+            for li in range(layers):
+                ly = top_y - int(35*scale) - li*int(28*scale)
+                lr = int(canopy_r * (0.95 - li*0.18) + rng.randint(-6,6))
+                # haze for depth
+                haze_mix = 0.35*(1-depth)
+                for ci in range(5):
+                    cx = int(tx + n_off + rng.randint(-lr//2, lr//2))
+                    cy = int(ly + rng.randint(-lr//3, lr//3))
+                    col = greens[li % len(greens)]
+                    # mix with sky for atmospheric perspective
+                    if haze_mix > 0:
+                        col = tuple(int(c*(1-haze_mix)+210*haze_mix) for c in col)
+                    a = 210 if li == 0 else 190
+                    # draw leaf cluster as soft ellipse
+                    draw.ellipse((cx - lr//2, cy - lr//3, cx + lr//2, cy + lr//3), fill=(*col, a))
+                    # highlight
+                    hl = tuple(min(255, c+30) for c in col)
+                    draw.ellipse((cx - lr//4, cy - lr//6, cx + lr//6, cy - lr//8), fill=(*hl, 80))
+
+    def _paint_photoreal_water(self, image, theme, w, h, rng):
+        """Photorealistic water — gradient depth + FBM waves + specular + sky reflection, replaces pathetic arcs."""
+        if theme not in ("ocean","river","waterfall","mountain","winter","canyon","meadow"):
+            return
+        draw = ImageDraw.Draw(image, "RGBA")
+        # water zone: bottom 38% of image
+        water_top = int(h * 0.62)
+        # depth gradient: deep -> shallow
+        deep, shallow = (15, 45, 90), (45, 115, 140)
+        if theme == "waterfall":
+            deep, shallow = (20, 55, 85), (70, 140, 160)
+        elif theme == "river":
+            deep, shallow = (25, 65, 85), (60, 130, 145)
+        # fill gradient row by row with slight noise for realism
+        water_arr = np.zeros((h - water_top, w, 3), dtype=np.uint8)
+        for y in range(h - water_top):
+            t = y / max(h - water_top - 1, 1)
+            # add subtle Perlin undulation to color
+            n = self._perlin_noise_2d(np.array([y*0.08]), np.array([0.0]))[0] * 0.04
+            nt = np.clip(t + n, 0, 1)
+            r = int(deep[0]*(1-nt) + shallow[0]*nt)
+            g = int(deep[1]*(1-nt) + shallow[1]*nt)
+            b = int(deep[2]*(1-nt) + shallow[2]*nt)
+            water_arr[y, :] = (r,g,b)
+        # add FBM wave texture overlay (specular)
+        lw, lh = w // 4, (h - water_top) // 4
+        wave = self._fbm(lw, lh, octaves=4, scale=0.02)
+        wave = (wave - 0.5) * 2.0  # -1 to 1
+        wave_img = Image.fromarray(((wave + 1)*127).astype(np.uint8), mode='L').resize((w, h - water_top), Image.BICUBIC)
+        wave_arr = np.array(wave_img, dtype=np.float32) / 255.0
+        # specular highlights where wave > threshold
+        specular_mask = (wave_arr > 0.68).astype(np.float32) * 85
+        foam_mask = (wave_arr > 0.82).astype(np.float32) * 55
+        # composite water gradient + waves
+        water_img = Image.fromarray(water_arr, 'RGB').convert('RGBA')
+        # add specular white overlay
+        spec_layer = Image.new('RGBA', (w, h - water_top), (255, 255, 255, 0))
+        spec_layer.putalpha(Image.fromarray(np.clip(specular_mask, 0, 255).astype(np.uint8)))
+        foam_layer = Image.new('RGBA', (w, h - water_top), (255, 250, 240, 0))
+        foam_layer.putalpha(Image.fromarray(np.clip(foam_mask, 0, 255).astype(np.uint8)))
+        # sky reflection: blend top of water with flipped sky strip (subtle)
+        # take sky strip from just above water_top, flip vertically
+        sky_strip = image.crop((0, max(0, water_top - int(h*0.18)), w, water_top)).resize((w, h - water_top), Image.BICUBIC)
+        sky_strip = sky_strip.transpose(Image.FLIP_TOP_BOTTOM).filter(ImageFilter.GaussianBlur(radius=2))
+        water_img = Image.alpha_composite(water_img, Image.blend(Image.new('RGBA', water_img.size, (0,0,0,0)), sky_strip.convert('RGBA'), 0.18))
+        water_img = Image.alpha_composite(water_img, spec_layer)
+        water_img = Image.alpha_composite(water_img, foam_layer)
+        # horizon foam line
+        draw_water = ImageDraw.Draw(water_img)
+        draw_water.line((0, 0, w, 0), fill=(255, 250, 240, 90), width=2)
+        image.paste(water_img, (0, water_top), mask=water_img.split()[3] if water_img.mode == 'RGBA' else None)
+
     def _radial_gradient(self, w, h, cx, cy, inner_color, outer_color, power=2.0):
         """Instant vectorized radial engine with customized tone mapping curves."""
         x = np.arange(w, dtype=np.float32)
@@ -310,6 +422,13 @@ class OfflineSceneGenerator:
 
         # 4. Mountain ridges with atmospheric perspective
         self._paint_mountain_ridges(sky, sw, sh, sky_bottom, rng)
+
+        # 4b. Photorealistic foreground — trees & water replace pathetic flats
+        try:
+            self._paint_photoreal_trees(sky, theme, sw, sh, rng)
+            self._paint_photoreal_water(sky, theme, sw, sh, rng)
+        except Exception:
+            pass
 
         # 5. Downscale 3× with LANCZOS for flawless anti-aliasing
         image = sky.resize(self.SIZE, Image.Resampling.LANCZOS)
