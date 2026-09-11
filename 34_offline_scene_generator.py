@@ -215,18 +215,32 @@ class OfflineSceneGenerator:
                     draw.ellipse((cx - lr//4, cy - lr//6, cx + lr//6, cy - lr//8), fill=(*hl, 80))
 
     def _paint_photoreal_water(self, image, theme, w, h, rng):
-        """Photorealistic water — gradient depth + FBM waves + specular + sky reflection, replaces pathetic arcs."""
-        if theme not in ("ocean","river","waterfall","mountain","winter","canyon","meadow"):
-            return
+        """Photorealistic water — beach/ocean realistic blend where sand meets sea is visible."""
+        if theme not in ("ocean","river","waterfall","mountain","winter","canyon","meadow","beach"):
+            if "beach" in theme or "ocean" in theme:
+                pass
+            else:
+                return
+        # handle beach alias
+        is_beach = theme in ("ocean","beach") or "beach" in theme
         draw = ImageDraw.Draw(image, "RGBA")
-        # water zone: bottom 38% of image
-        water_top = int(h * 0.62)
+        # beach/ocean: sand beach visible at bottom, then shallow turquoise, then deep offshore — blend seen
+        if is_beach:
+            water_top = int(h * 0.58)
+            beach_h = int(h * 0.10)
+            shallow_beach = int(h * 0.08)
+        else:
+            water_top = int(h * 0.62)
+            beach_h = 0
+            shallow_beach = 0
         # depth gradient: deep -> shallow
         deep, shallow = (15, 45, 90), (45, 115, 140)
         if theme == "waterfall":
             deep, shallow = (20, 55, 85), (70, 140, 160)
         elif theme == "river":
             deep, shallow = (25, 65, 85), (60, 130, 145)
+        elif is_beach:
+            deep, shallow = (10, 50, 110), (40, 130, 165)  # deeper offshore, turquoise shallow near sand
         # fill gradient row by row with slight noise for realism
         water_arr = np.zeros((h - water_top, w, 3), dtype=np.uint8)
         for y in range(h - water_top):
@@ -263,6 +277,35 @@ class OfflineSceneGenerator:
         # horizon foam line
         draw_water = ImageDraw.Draw(water_img)
         draw_water.line((0, 0, w, 0), fill=(255, 250, 240, 90), width=2)
+        # beach/ocean blend: visible sand-to-sea transition with foam line
+        if is_beach:
+            # sand beach at bottom of water_img
+            sand_start = (h - water_top) - beach_h
+            # shallow beach strip (wet sand to turquoise)
+            for y in range(sand_start, h - water_top):
+                t = (y - sand_start) / max(beach_h, 1)
+                # sand color to shallow water blend
+                sand_col = np.array([210, 195, 165], dtype=np.float32)
+                water_col = np.array(shallow, dtype=np.float32)
+                blend = np.clip(t*1.2, 0, 1)
+                r, g, b = (sand_col*(1-blend) + water_col*blend).astype(int)
+                # add sand grain via Perlin
+                n = self._perlin_noise_2d(np.array([y*0.2]), np.array([0.0]))[0] * 6
+                r = np.clip(r + n, 0, 255).astype(int)
+                water_arr[y, :] = (r, g, b)
+            # foam at sand-water edge (visible blend)
+            foam_y = sand_start
+            for x in range(0, w, 3):
+                n = self._perlin_noise_2d(np.array([x*0.015]), np.array([foam_y*0.02]))[0]
+                fw = int(18 + n*8)
+                fh = int(4 + n*3)
+                draw_water.ellipse((x - fw//2, foam_y - fh//2, x + fw//2, foam_y + fh//2), fill=(255, 250, 240, 160))
+            # re-create water_img with beach-corrected arr
+            water_img = Image.fromarray(water_arr, 'RGB').convert('RGBA')
+            # re-apply specular/foam/sky reflection on beach-corrected water (light)
+            water_img = Image.alpha_composite(water_img, spec_layer)
+            water_img = Image.alpha_composite(water_img, foam_layer)
+            water_img = Image.alpha_composite(water_img, Image.blend(Image.new('RGBA', water_img.size, (0,0,0,0)), sky_strip.convert('RGBA'), 0.14))
         image.paste(water_img, (0, water_top), mask=water_img.split()[3] if water_img.mode == 'RGBA' else None)
 
     def _paint_foreground_focus(self, image, theme, w, h, rng):
