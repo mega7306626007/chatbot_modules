@@ -91,11 +91,12 @@ def run_web_server():
             if path.startswith("/generated_images/"):
                 image_name = Path(path.removeprefix("/generated_images/")).name
                 image_path = GENERATED_DIR / image_name
-                if image_path.parent != GENERATED_DIR or image_path.suffix.lower() != ".png":
+                if image_path.parent != GENERATED_DIR or image_path.suffix.lower() not in (".png", ".jpg", ".jpeg"):
                     self._send(404, "Not found", "text/plain; charset=utf-8")
                     return
                 try:
-                    self._send(200, image_path.read_bytes(), "image/png")
+                    mime = "image/jpeg" if image_path.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+                    self._send(200, image_path.read_bytes(), mime)
                 except OSError:
                     self._send(404, "Image not found", "text/plain; charset=utf-8")
                 return
@@ -134,11 +135,11 @@ def run_web_server():
                     )
                     return
                 with bot_lock:
-                    before_image_files = set(GENERATED_DIR.glob("*.png"))
+                    before_image_files = set(GENERATED_DIR.glob("*.png")) | set(GENERATED_DIR.glob("*.jpg")) | set(GENERATED_DIR.glob("*.jpeg"))
                     chatbot.logger.log("user", message.strip())
                     reply = chatbot.respond(message.strip())
                     chatbot.logger.log("bot", reply)
-                    after_image_files = set(GENERATED_DIR.glob("*.png"))
+                    after_image_files = set(GENERATED_DIR.glob("*.png")) | set(GENERATED_DIR.glob("*.jpg")) | set(GENERATED_DIR.glob("*.jpeg"))
                     new_image_files = after_image_files - before_image_files
                     image_url = None
                     if new_image_files:
