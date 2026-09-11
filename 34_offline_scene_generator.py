@@ -262,6 +262,57 @@ class OfflineSceneGenerator:
         draw_water.line((0, 0, w, 0), fill=(255, 250, 240, 90), width=2)
         image.paste(water_img, (0, water_top), mask=water_img.split()[3] if water_img.mode == 'RGBA' else None)
 
+    def _paint_city_skyline(self, image, w, h, rng):
+        """Photorealistic city silhouette — varied building heights + window lights."""
+        draw = ImageDraw.Draw(image, "RGBA")
+        x = -60
+        while x < w:
+            bw = rng.randint(90, 220)
+            bh = rng.randint(180, 520)
+            top = int(h*0.62) - bh
+            col = rng.choice([(22,28,45,235),(32,38,58,225),(42,48,68,215)])
+            draw.rectangle((x, top, x+bw, h), fill=col)
+            # windows — theme-aware warm lights
+            for wx in range(x+14, x+bw-10, 28):
+                for wy in range(top+18, h-22, 36):
+                    if rng.random() > 0.45:
+                        draw.rectangle((wx, wy, wx+9, wy+15), fill=(255, 225, 130, 205))
+            x += bw + rng.randint(10, 24)
+
+    def _paint_distant_treeline(self, image, w, h, sky_bottom_color, rng):
+        """Distant forested hills — haze-blended treeline, not mountains."""
+        draw = ImageDraw.Draw(image, "RGBA")
+        base_y = int(h*0.58)
+        # soft hill
+        points = [(0, h)]
+        for x in range(0, w+1, w//18):
+            points.append((x, base_y - rng.randint(18, 55)))
+        points.append((w, h))
+        hill_col = tuple(int(c*0.55) for c in sky_bottom_color)
+        draw.polygon(points, fill=(*hill_col, 210))
+        # treeline silhouette on hill
+        for _ in range(22):
+            tx = rng.randint(0, w)
+            ty = int(base_y - rng.randint(8, 35))
+            tw = rng.randint(18, 38)
+            th = rng.randint(45, 95)
+            col = (18, 55, 32, 190)
+            draw.polygon([(tx, ty - th//3),(tx - tw//2, ty + th//5),(tx + tw//2, ty + th//5)], fill=col)
+
+    def _paint_horizon_haze(self, image, w, h, sky_bottom_color, theme, rng):
+        """Subtle horizon accent for ocean/space/rainy — differentiated atmosphere colors per prompt."""
+        draw = ImageDraw.Draw(image, "RGBA")
+        # thin horizon line with theme-tinted haze, not mountains
+        haze_col = {
+            "ocean": (30, 90, 140, 70),
+            "space": (20, 20, 40, 90),
+            "rainy": (60, 80, 95, 60),
+        }.get(theme, (*sky_bottom_color, 55))
+        y0 = int(h*0.56)
+        for y in range(y0, y0+18):
+            a = int(haze_col[3] * (1 - (y-y0)/18))
+            draw.line((0, y, w, y), fill=(*haze_col[:3], a))
+
     def _radial_gradient(self, w, h, cx, cy, inner_color, outer_color, power=2.0):
         """Instant vectorized radial engine with customized tone mapping curves."""
         x = np.arange(w, dtype=np.float32)
@@ -420,10 +471,23 @@ class OfflineSceneGenerator:
             sun_glow = self._radial_gradient(sw, sh, sw // 2, int(sh * 0.42), (255, 245, 210), (0, 0, 0), power=2.5)
             sky = Image.fromarray(np.clip(np.array(sky, dtype=np.int32) + np.array(sun_glow) // 3, 0, 255).astype(np.uint8))
 
-        # 4. Mountain ridges with atmospheric perspective
-        self._paint_mountain_ridges(sky, sw, sh, sky_bottom, rng)
+        # 4. Theme-specific landscape (no longer just mountains for every prompt)
+        try:
+            if theme in ("mountain","canyon","volcano","desert","tundra","savanna","winter","aurora"):
+                self._paint_mountain_ridges(sky, sw, sh, sky_bottom, rng)
+            elif theme == "city":
+                self._paint_city_skyline(sky, sw, sh, rng)
+            elif theme in ("forest","garden","autumn","meadow","waterfall","river"):
+                self._paint_distant_treeline(sky, sw, sh, sky_bottom, rng)
+            elif theme in ("ocean","space","rainy"):
+                # ocean/space keep sky-dominant with horizon accent only
+                self._paint_horizon_haze(sky, sw, sh, sky_bottom, theme, rng)
+            else:
+                self._paint_mountain_ridges(sky, sw, sh, sky_bottom, rng)
+        except Exception:
+            pass
 
-        # 4b. Photorealistic foreground — trees & water replace pathetic flats
+        # 4b. Photorealistic foreground — trees & water upgraded per theme (not pathetic flats)
         try:
             self._paint_photoreal_trees(sky, theme, sw, sh, rng)
             self._paint_photoreal_water(sky, theme, sw, sh, rng)
