@@ -490,28 +490,28 @@ class OfflineSceneGenerator:
         theme = self.classify_prompt(prompt)
         rng = random.Random(seed if seed is not None else prompt)
 
-        # Theme sky palettes for maximized engine
+        # 300× fine-tuned sky palettes — sky stays sky-blue, theme only tints horizon/atmosphere (forest green no longer bleeds into sky)
         palettes = {
             "sunset": ((235, 75, 45), (255, 205, 115)),
             "sunrise": ((255, 140, 80), (255, 220, 160)),
             "ocean": ((100, 180, 220), (30, 100, 180)),
-            "forest": ((140, 200, 160), (50, 120, 90)),
+            "forest": ((135, 206, 235), (70, 140, 180)),  # blue sky, green stays in trees/ground only
             "space": ((10, 10, 30), (2, 2, 15)),
-            "city": ((180, 190, 210), (90, 110, 140)),
+            "city": ((135, 190, 215), (90, 120, 155)),
             "mountain": ((160, 200, 230), (70, 120, 170)),
-            "desert": ((255, 180, 90), (255, 230, 170)),
+            "desert": ((135, 195, 230), (255, 210, 140)),  # blue top, warm horizon
             "aurora": ((15, 25, 50), (5, 15, 40)),
-            "rainy": ((100, 130, 150), (45, 70, 95)),
-            "garden": ((160, 220, 180), (70, 140, 100)),
+            "rainy": ((110, 135, 155), (70, 95, 115)),
+            "garden": ((135, 206, 235), (80, 155, 185)),
             "winter": ((180, 210, 240), (100, 150, 200)),
-            "waterfall": ((120, 180, 200), (40, 90, 140)),
-            "autumn": ((220, 140, 60), (255, 210, 110)),
-            "savanna": ((255, 200, 120), (180, 140, 80)),
-            "canyon": ((200, 110, 70), (255, 190, 120)),
-            "volcano": ((180, 60, 30), (255, 170, 80)),
+            "waterfall": ((125, 190, 220), (45, 105, 150)),
+            "autumn": ((135, 195, 230), (255, 200, 120)),  # blue sky, warm horizon only
+            "savanna": ((135, 200, 230), (255, 205, 140)),
+            "canyon": ((135, 190, 225), (255, 185, 125)),
+            "volcano": ((120, 50, 35), (255, 170, 80)),  # ash-tinted top, warm horizon
             "tundra": ((170, 200, 220), (90, 140, 180)),
-            "meadow": ((160, 220, 180), (110, 180, 140)),
-            "river": ((130, 190, 210), (60, 120, 90)),
+            "meadow": ((135, 206, 235), (85, 160, 185)),
+            "river": ((135, 200, 225), (70, 140, 170)),
         }
         sky_top, sky_bottom = palettes.get(theme, ((180, 190, 210), (90, 110, 140)))
 
