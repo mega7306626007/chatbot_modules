@@ -71,6 +71,35 @@ class OfflineSceneGenerator:
             frequency *= lacunarity
         return value / max_val if max_val > 0 else 0
 
+    def _paint_realistic_clouds(self, image, theme, w, h, rng):
+        """Add soft volumetric cloud layer over sky — photorealistic depth."""
+        # Only for sky-visible themes; intensity varies by theme
+        density = {"sunset": 0.38, "sunrise": 0.35, "ocean": 0.42, "forest": 0.28, "mountain": 0.30, "desert": 0.15, "aurora": 0.18, "rainy": 0.55, "garden": 0.25, "winter": 0.32}.get(theme, 0.30)
+        # Low-res cloud noise upscaled with blur = cheap volumetric clouds
+        cw, ch = max(32, w // 16), max(24, h // 16)
+        npr = np.random.RandomState(hash((theme, rng.randint(0, 999999))) % (2**32))
+        low = npr.rand(ch, cw).astype(np.float32)
+        # threshold to create puffy shapes
+        low = np.clip((low - (0.55 - density*0.2)) * 3.0, 0, 1)
+        low_img = Image.fromarray((low * 255).astype(np.uint8), mode='L').resize((w, h), Image.BICUBIC)
+        low_img = low_img.filter(ImageFilter.GaussianBlur(radius= w * 0.012))
+        # Fade clouds toward horizon (less dense near ground)
+        fade = np.linspace(1.0, 0.25, h, dtype=np.float32)[:, None]
+        cloud_alpha = (np.array(low_img, dtype=np.float32) / 255.0) * fade * 62  # 0-62 alpha
+        # slight warm tint for sunset/sunrise
+        tint = (255, 245, 235) if theme in ("sunset", "sunrise", "desert") else (255, 255, 255)
+        cloud_layer = Image.new('RGBA', (w, h), (*tint, 0))
+        # build alpha channel
+        alpha_img = Image.fromarray(np.clip(cloud_alpha, 0, 255).astype(np.uint8), mode='L')
+        # composite soft white clouds over sky only (upper 70%)
+        overlay = Image.new('RGBA', (w, h), (*tint, 0))
+        overlay.putalpha(alpha_img)
+        try:
+            # composite overlay onto image in-place via paste with alpha mask
+            image.paste(overlay, mask=overlay.split()[3])
+        except Exception:
+            pass
+
     def _radial_gradient(self, w, h, cx, cy, inner_color, outer_color, power=1.5):
         """Create a radial gradient mask — numpy vectorized (~50x faster)."""
         max_dist = math.hypot(w, h) or 1.0
@@ -136,6 +165,13 @@ class OfflineSceneGenerator:
 
         # Layer 0: Sky gradient with atmospheric scattering
         self._paint_sky(draw, theme, sw, sh, rng)
+
+        # Layer 0b: Photorealistic cloud volume (value-noise + soft alpha) for non-space themes
+        if theme not in ("space", "city"):
+            try:
+                self._paint_realistic_clouds(image, theme, sw, sh, rng)
+            except Exception:
+                pass
 
         # Layer 1: Far background (mountains, distant hills, stars)
         self._paint_far_background(draw, theme, sw, sh, rng)
@@ -612,8 +648,17 @@ class OfflineSceneGenerator:
                 highlights=(1.1, 1.0, 0.9),
                 shadows=(0.85, 0.9, 1.05))
 
-        # Subtle vignette
-        image = self._vignette(image, 0.35)
+        # Subtle vignette + filmic S-curve for photorealistic depth
+        image = self._vignette(image, 0.32)
+        # Filmic S-curve: lift shadows / compress highlights for natural contrast
+        try:
+            arr = np.array(image, dtype=np.float32) / 255.0
+            # ACES-like approx: s-curve
+            arr = np.clip((arr - 0.5) * 1.12 + 0.5, 0, 1)
+            arr = np.power(arr, 0.95)
+            image = Image.fromarray((arr * 255).astype(np.uint8))
+        except Exception:
+            pass
 
         return image
 

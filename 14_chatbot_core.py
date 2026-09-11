@@ -3801,6 +3801,25 @@ WEB LOOKUP & BROWSING (need internet; fail closed if offline)
         os.makedirs(output_dir, exist_ok=True)
         timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         output_path = os.path.join(output_dir, f"background_{timestamp}.png")
+        # Photorealistic hybrid: try real CC photograph first (online), fall back to
+        # beautiful procedural Pillow rendering (offline). This is what makes
+        # "generate image: a peaceful forest" look close to real life when online.
+        # Extract scene prompt after "generate image:" / "create background" etc.
+        m = re.search(r"generate image[:\s]+(.+)", text, re.IGNORECASE)
+        scene_query = m.group(1).strip() if m and m.group(1).strip() else text
+        # strip common filler words that hurt photo search
+        for prefix in ("a ", "an ", "the ", "of "):
+            if scene_query.lower().startswith(prefix):
+                scene_query = scene_query[len(prefix):]
+        try:
+            result = self.real_photo_connector.fetch_scene_photo(scene_query, output_path)
+            if "error" not in result:
+                return (f"Got a real photograph for '{scene_query}' — saved to {result['path']}.\n"
+                        f"\"{result['title']}\" by {result['creator']} ({result['license']}) — "
+                        f"real licensed photo (offline procedural fallback available).")
+        except Exception:
+            pass
+        # offline fallback — now also beautiful (cinematic procedural)
         return self.scene_generator.generate(text, output_path)
 
     def _handle_real_photo_request(self, text, m):

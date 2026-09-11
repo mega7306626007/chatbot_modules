@@ -791,5 +791,54 @@ class RealPhotoConnector:
             result["note"] = f"no '{query}' photo found, so this is just '{object_noun}' instead"
         return result
 
+    def fetch_scene_photo(self, query: str, output_path: str):
+        """Photorealistic scene path: search Openverse for a real CC photograph
+        matching a free-form scene query (e.g. 'peaceful forest', 'ocean sunset').
+        Returns same shape as fetch_and_save. This is how 'generate image: ...'
+        can now return a true photograph when online, with the Pillow
+        procedural renderer as the honest offline fallback."""
+        # clean query — strip leading 'a ' / 'an ' that users often type
+        q = query.strip().lower()
+        for prefix in ("a ", "an "):
+            if q.startswith(prefix):
+                q = q[len(prefix):]
+        # keep query short — Openverse works better with 2-4 keywords
+        q = " ".join(q.split()[:6])
+        found = self.search(q)
+        if "error" in found:
+            # retry with last 2 keywords as fallback
+            fallback = " ".join(q.split()[-2:])
+            if fallback != q:
+                found = self.search(fallback)
+            if "error" in found:
+                return found
+        image_url = found.get("url")
+        if not image_url:
+            return {"error": "search result had no image URL"}
+        try:
+            request = urllib.request.Request(image_url, headers={"User-Agent": "offline-chatbot/1.0"})
+            with urllib.request.urlopen(request, timeout=self.client.timeout_seconds) as response:
+                if response.status != 200:
+                    return {"error": f"image download failed (HTTP {response.status})"}
+                image_bytes = response.read()
+        except (urllib.error.URLError, TimeoutError) as e:
+            return {"error": f"couldn't download the image ({e})"}
+        if not PILLOW_AVAILABLE:
+            return {"error": "Pillow isn't installed, so the downloaded image can't be processed"}
+        try:
+            with open(output_path, "wb") as f:
+                f.write(image_bytes)
+            img = Image.open(output_path).convert("RGB")
+            # Keep original aspect but cap at 1024 longest edge for free-tier RAM
+            w, h = img.size
+            max_edge = 1024
+            if max(w, h) > max_edge:
+                scale = max_edge / max(w, h)
+                img = img.resize((int(w*scale), int(h*scale)), Image.LANCZOS)
+            img.save(output_path, quality=92, optimize=True)
+        except Exception as e:
+            return {"error": f"downloaded file wasn't a valid image ({e})"}
+        return {"path": output_path, "title": found["title"], "creator": found["creator"], "license": found["license"]}
+
 
 # ==============================================================================
