@@ -148,6 +148,11 @@ class OfflineSceneGenerator:
             sky_mix = 0.75 * (1.0 - depth_factor)
             final_rgb = (base_mountain * (1.0 - sky_mix) + np.array(sky_bottom_color) * sky_mix).astype(np.uint8)
             draw.polygon(points, fill=(*final_rgb, 255))
+            # snowcaps — only on highest peaks
+            if theme in ("mountain","winter","volcano","tundra") and layer < 2:
+                for x, y in zip(x_points[::4], y_points[::4]):
+                    if y < horizon_height - amplitude*0.45:
+                        draw.ellipse((x-16, y-7, x+16, y+5), fill=(250, 252, 255, 185))
 
     def _paint_photoreal_trees(self, image, theme, w, h, rng):
         """Photorealistic trees — fractal trunks + layered canopy clusters with depth haze, replaces pathetic flat triangles."""
@@ -309,6 +314,89 @@ class OfflineSceneGenerator:
                 draw.ellipse((fx-1, fy-1, fx+1, fy+1), fill=(210,230,255, 120))
             else:
                 draw.ellipse((fx-6, fy-5, fx+6, fy+5), fill=(ground_col[0]+18, ground_col[1]+18, ground_col[2]+18, 165))
+
+    def _paint_flowers(self, image, theme, w, h, rng):
+        """Garden/meadow flowers — varied petals, centers, stems, depth-blurred."""
+        if theme not in ("garden","meadow","spring","autumn"):
+            return
+        draw = ImageDraw.Draw(image, "RGBA")
+        ground_top = int(h*0.74)
+        flower_cols = [(220, 60, 80), (255, 210, 60), (180, 80, 200), (255, 255, 255), (255, 180, 100)]
+        for _ in range(36 if w > 1800 else 18):
+            fx = rng.randint(int(w*0.08), int(w*0.92))
+            fy = rng.randint(ground_top+12, h-10)
+            s = (fy - ground_top) / (h - ground_top)
+            sz = int(8 + 10*s + rng.randint(-2,3))
+            col = rng.choice(flower_cols)
+            # stem
+            draw.line((fx, fy, fx + rng.randint(-2,2), fy - sz*2), fill=(45, 110, 45, 160), width=2)
+            # 5 petals
+            for a in range(5):
+                ang = a * 72 + rng.randint(-8,8)
+                rad = math.radians(ang)
+                px = int(fx + math.cos(rad) * sz*0.7)
+                py = int(fy - sz*2 + math.sin(rad) * sz*0.5)
+                draw.ellipse((px - sz//2, py - sz//2, px + sz//2, py + sz//2), fill=(*col, 210))
+            # center
+            draw.ellipse((fx - sz//3, fy - sz*2 - sz//3, fx + sz//3, fy - sz*2 + sz//3), fill=(255, 225, 60, 230))
+
+    def _paint_sun_radiance(self, image, theme, w, h, rng):
+        """Radiance of the sun — bloom, lens flare, god rays, not flat disc."""
+        if theme not in ("sunset","sunrise","desert","savanna","ocean","meadow","canyon"):
+            return
+        draw = ImageDraw.Draw(image, "RGBA")
+        sx, sy = w//2, int(h*0.32)
+        # god rays
+        for _ in range(9):
+            ang = rng.uniform(-0.9, 0.9)
+            length = h*0.75
+            ex = sx + math.cos(ang) * length
+            ey = sy + math.sin(ang) * length
+            alpha = rng.randint(12, 28)
+            draw.line((sx, sy, ex, ey), fill=(255, 235, 180, alpha), width=rng.randint(2,6))
+        # lens flare orbs
+        for _ in range(3):
+            fx = sx + rng.randint(-w//8, w//8)
+            fy = sy + rng.randint(-h//8, h//8)
+            r = rng.randint(6, 14)
+            draw.ellipse((fx - r, fy - r, fx + r, fy + r), fill=(255, 255, 255, 35))
+
+    def _paint_snow_detail(self, image, theme, w, h, rng):
+        """Snow — drifts, sparkle, footprints, subsurface scattering."""
+        if theme not in ("winter","tundra","aurora","mountain"):
+            return
+        draw = ImageDraw.Draw(image, "RGBA")
+        ground_top = int(h*0.72)
+        # drift polygon with Perlin
+        pts = [(0, h)]
+        for x in range(0, w+1, w//30):
+            n = self._perlin_noise_2d(np.array([x*0.01]), np.array([ground_top*0.01]))[0]
+            y = ground_top + int(n*10)
+            pts.append((x, y))
+        pts.append((w, h))
+        draw.polygon(pts, fill=(250, 252, 255, 235))
+        # sparkle
+        for _ in range(40 if w > 1800 else 20):
+            sx = rng.randint(0, w)
+            sy = rng.randint(ground_top, h-10)
+            r = rng.randint(1, 3)
+            draw.ellipse((sx - r, sy - r, sx + r, sy + r), fill=(255, 255, 255, rng.randint(120, 220)))
+
+    def _paint_aurora_detail(self, image, theme, w, h, rng):
+        """Aurora — vivid curtains, green/purple/pink, waviness."""
+        if theme not in ("aurora","tundra","winter","space"):
+            return
+        draw = ImageDraw.Draw(image, "RGBA")
+        for _ in range(4):
+            x0 = rng.randint(-w//4, w)
+            points = []
+            for i in range(14):
+                px = x0 + i*(w//14) + rng.randint(-28,28)
+                py = rng.randint(int(h*0.08), int(h*0.38))
+                points.append((px, py))
+            col = rng.choice([(80, 240, 160, 95), (100, 180, 255, 85), (200, 120, 255, 80)])
+            for i in range(len(points)-1):
+                draw.line((points[i], points[i+1]), fill=col, width=rng.randint(10, 18), joint="curve")
 
     def _paint_city_skyline(self, image, w, h, rng):
         """Photorealistic city silhouette — varied building heights + window lights."""
@@ -551,11 +639,15 @@ class OfflineSceneGenerator:
         except Exception:
             pass
 
-        # 4b. Photorealistic foreground — trees & water upgraded per theme (not pathetic flats)
+        # 4b. Photorealistic foreground — trees & water + beauty details per prompt
         try:
             self._paint_photoreal_trees(sky, theme, sw, sh, rng)
             self._paint_photoreal_water(sky, theme, sw, sh, rng)
             self._paint_foreground_focus(sky, theme, sw, sh, rng)
+            self._paint_flowers(sky, theme, sw, sh, rng)
+            self._paint_sun_radiance(sky, theme, sw, sh, rng)
+            self._paint_snow_detail(sky, theme, sw, sh, rng)
+            self._paint_aurora_detail(sky, theme, sw, sh, rng)
         except Exception:
             pass
 
