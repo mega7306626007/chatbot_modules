@@ -16,6 +16,8 @@ WEB_FILES = {
     "/index.html": "index.html",
     "/styles.css": "styles.css",
     "/app.js": "app.js",
+    "/manifest.json": "manifest.json",
+    "/sw.js": "sw.js",
     "/favicon.ico": "favicon.ico",
     "/favicon-16x16.png": "favicon-16x16.png",
     "/favicon-32x32.png": "favicon-32x32.png",
