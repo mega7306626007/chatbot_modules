@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mwesh</string>
+    <string name="title_activity_main">Mwesh</string>
+    <string name="package_name">com.mwesh.pychat</string>
+    <string name="custom_url_scheme">com.mwesh.pychat</string>
+</resources>
