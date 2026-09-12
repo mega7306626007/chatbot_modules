@@ -16,7 +16,7 @@ body { margin: 0; color: var(--ink); background: var(--paper); font-family: Manr
 button, input { font: inherit; }
 button { cursor: pointer; }
 .app-shell { display: flex; min-height: 100vh; }
-.sidebar { width: 276px; padding: 30px 20px 20px; background: #10231f; color: #f4f7f2; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #719087 #10231f; }
+.sidebar { width: 276px; padding: 30px 20px 20px; background: #10231f; color: #f4f7f2; display: flex; flex-direction: column; max-height: 100vh; height: 100vh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #719087 #10231f; -webkit-overflow-scrolling: touch; }
 .sidebar::-webkit-scrollbar { width: 6px; }
 .sidebar::-webkit-scrollbar-thumb { background: #719087; border-radius: 6px; }
 .sidebar::-webkit-scrollbar-track { background: #10231f; }
@@ -29,7 +29,7 @@ button { cursor: pointer; }
 .new-chat:hover { background: rgba(255,255,255,.15); transform: translateY(-1px); }
 .new-chat span { margin-right: 9px; color: var(--yellow); font-size: 19px; line-height: 0; vertical-align: -1px; }
 .nav-label { margin: 0 12px 13px; color: #719087; font: 500 10px 'DM Mono', monospace; letter-spacing: 1.2px; text-transform: uppercase; }
-.nav-list { display: grid; gap: 5px; flex: 1; overflow-y: auto; }
+.nav-list { display: grid; gap: 5px; }
 .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 0; border-radius: 7px; color: #bdcbc4; background: transparent; text-align: left; font-size: 13px; text-decoration: none; }
 .nav-item:hover, .nav-item.active { color: white; background: rgba(255,255,255,.1); }
 .nav-icon { width: 18px; color: #82ae9c; text-align: center; font-size: 16px; }
@@ -110,7 +110,7 @@ button { cursor: pointer; }
   .suggestions { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 720px) {
-  .sidebar { position: fixed; z-index: 5; inset: 0 auto 0 0; width: min(276px, 86vw); transform: translateX(-100%); transition: transform .25s ease; box-shadow: 18px 0 40px rgba(0,0,0,.18); }
+  .sidebar { position: fixed; z-index: 5; inset: 0 auto 0 0; width: min(276px, 86vw); transform: translateX(-100%); transition: transform .25s ease; box-shadow: 18px 0 40px rgba(0,0,0,.18); overflow-y: auto; max-height: 100dvh; height: 100dvh; }
   .sidebar.open { transform: translateX(0); }
   .menu-toggle, .mobile-close { display: block; }
   .mobile-close { margin-left: auto; color: #a6bbb1; }
