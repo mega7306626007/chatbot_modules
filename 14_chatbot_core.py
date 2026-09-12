@@ -1700,13 +1700,13 @@ class ChatBot:
         if "sci-fi" in text_lower or "science fiction" in text_lower:
             category = "scifi"
         name = self.user_name()
-        opener = self.story_nn.generate(
+        opener = self.story_nn.generate_paragraphs(
             seed_text="once upon a time",
-            max_words=90, temperature=0.6,
+            paragraphs=3, max_words=110, temperature=0.75,
         )
         closer = self.story_nn.generate(
             seed_text=f"{name} finally understood",
-            max_words=70, temperature=0.6,
+            max_words=80, temperature=0.6,
         )
         title = f"A {category or 'neural'} story from the trained network"
         body = f"{opener}\n\n{closer}" if closer else opener
