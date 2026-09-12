@@ -144,9 +144,9 @@ class StoryLanguageModel:
     # Generation
     # ------------------------------------------------------------------
 
-    def generate(self, seed_text="", max_words=60, temperature=0.6, seed=None,
-                 rep_penalty=1.4, rep_window=12,
-                 top_k=100, top_p=0.90, min_sentence_words=25,
+    def generate(self, seed_text="", max_words=110, temperature=0.8, seed=None,
+                 rep_penalty=1.5, rep_window=14,
+                 top_k=120, top_p=0.90, min_sentence_words=25,
                  block_ngrams=True):
         """Samples a short coherent passage from the learned distribution,
         seeded by seed_text (or from a bare start marker). Stops on a
@@ -230,6 +230,29 @@ class StoryLanguageModel:
                 break
 
         return self._detokenize(output)
+
+    def generate_paragraphs(self, seed_text="", paragraphs=3, max_words=110,
+                            temperature=0.8, seed=None, **kwargs):
+        """Generates a short multi-paragraph story by generating a leading
+        passage then re-seeding continuation from its tail, so the prose
+        stays on-topic across the break. Falls back to a single passage
+        if the model is unavailable."""
+        if not self.available():
+            return ""
+        parts = []
+        current = seed_text or "once upon a time"
+        for i in range(paragraphs):
+            part = self.generate(seed_text=current, max_words=max_words,
+                                 temperature=temperature, seed=seed, **kwargs)
+            if not part:
+                break
+            parts.append(part)
+            if i == 0:
+                # Seed the continuation from the tail of the opener to
+                # keep the thread going.
+                tail = self.tokenize(part)
+                current = " ".join(tail[-12:]) if len(tail) >= 12 else seed_text
+        return "\n\n".join(parts)
 
     @staticmethod
     def _detokenize(tokens):
