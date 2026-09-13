@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mwesh-v3';
+const CACHE_NAME = 'mwesh-v4';
 const ASSETS = [
   '/',
   '/index.html',
