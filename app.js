@@ -100,13 +100,13 @@ function renderMessage(text, role, imageUrl = null, time = null, save = true) {
 
   const copyBtn = document.createElement('button');
   copyBtn.className = 'copy-btn';
-  copyBtn.textContent = '&#128203;';
+  copyBtn.textContent = '📋';
   copyBtn.title = 'Copy';
   copyBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     navigator.clipboard.writeText(text).then(() => {
-      copyBtn.textContent = '&#10003;';
-      setTimeout(() => copyBtn.textContent = '&#128203;', 1200);
+      copyBtn.textContent = '✓';
+      setTimeout(() => copyBtn.textContent = '📋', 1200);
     });
   });
   bubble.appendChild(copyBtn);
