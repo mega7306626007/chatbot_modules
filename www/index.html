@@ -128,12 +128,18 @@
           <div><strong>Everyday chat</strong><span>Mwesh is ready</span></div>
         </div>
         <div class="topbar-actions">
-          <button class="icon-button" type="button" aria-label="Search conversation">&#8981;</button>
+          <div class="search-wrap">
+            <input type="search" id="search-input" placeholder="Search messages..." aria-label="Search messages" style="display:none;">
+            <button class="icon-button" id="search-toggle" type="button" aria-label="Search conversation" aria-expanded="false">&#8981;</button>
+          </div>
+          <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false">&#9728;</button>
           <button class="icon-button" id="clear-chat" type="button" aria-label="Clear conversation">&#10005;</button>
         </div>
       </header>
 
       <section class="conversation" id="conversation" aria-live="polite">
+        <div class="typing-indicator" id="typing-indicator" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="quick-replies" id="quick-replies" aria-label="Quick replies"></div>
         <div class="welcome-block">
           <div class="welcome-orbit"><img class="welcome-mark" src="/logo-full-512.png" alt="Mwesh" aria-hidden="true"></div>
           <p class="eyebrow">GOOD TO SEE YOU</p>
