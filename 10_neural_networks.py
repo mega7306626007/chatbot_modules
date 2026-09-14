@@ -1860,8 +1860,24 @@ class _BaseNeuralClassifier:
         self.last_val_accuracy = None
         self.last_train_size = None
         self.last_val_size = None
+        self._fitted = False
+        # Fitting is deferred to fit_async(); until it completes, predict()
+        # returns None so every caller falls through to rule-based handling.
 
-        self._fit()
+    def fit_async(self):
+        """Fit the classifier in a background daemon thread so ChatBot
+        construction (and thus web-server startup) is instant. predict()
+        returns None until training finishes, letting rule-based handlers
+        answer in the meantime."""
+        if self._fitted:
+            return
+        def _bg():
+            try:
+                self._fit()
+                self._fitted = True
+            except Exception:
+                pass  # stays unfitted; predict() keeps returning None
+        threading.Thread(target=_bg, daemon=True).start()
 
     # ---- persistence --------------------------------------------------
     #
@@ -2092,6 +2108,8 @@ class _BaseNeuralClassifier:
 
     def predict(self, text: str):
         """Returns (label, confidence) or None if below CONFIDENCE_THRESHOLD."""
+        if not self._fitted:
+            return None
         if not text.strip():
             return None
 
@@ -2127,6 +2145,7 @@ class _BaseNeuralClassifier:
         """Refits the model; returns (num_corrections, val_accuracy_before, val_accuracy_after)."""
         acc_before = self.last_val_accuracy
         self._fit()
+        self._fitted = True
         return len(self.corrections), acc_before, self.last_val_accuracy
 
     def known_labels(self):
