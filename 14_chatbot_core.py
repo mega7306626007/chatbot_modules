@@ -198,7 +198,9 @@ class ChatBot:
         self.similarity_matcher = SimilarityMatcher()
         self.notes_clusterer = NotesClusterer()
         self.nn_intent = NeuralIntentClassifier(NN_TRAINING_FILE, db=self.db)
+        self.nn_intent.fit_async()  # train in background; rule-based dispatch until ready
         self.sentiment_clf = SentimentClassifier(SENTIMENT_TRAINING_FILE, db=self.db)
+        self.sentiment_clf.fit_async()  # train in background; neutral fallback until ready
         self.smart_suggestions = SmartSuggestionEngine()
         # Resolved label -> response bank map for the smalltalk topic set
         # (populated on first topic handling; used by multi-turn
@@ -296,6 +298,7 @@ class ChatBot:
         # so the handlers below don't need to know or care which one
         # answered.
         self.transformer_lm = TransformerLanguageModel(self.language_model)
+        self.transformer_lm.fit_async()  # train in background; trigram fallback until ready
         # Rolling window of recent sentiment labels this session, most-
         # recent last - the raw material MoodTrendForecaster.forecast()
         # needs. Capped well above SEQUENCE_LENGTH so old entries just

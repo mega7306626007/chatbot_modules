@@ -2759,8 +2759,27 @@ class TransformerLanguageModel:
         self.word2id = {}
         self.id2word = {}
         self.last_training_info = None
-        if self.backend == "transformer":
-            self._fit()
+        self._fitted = False
+        # Training is deferred to fit_async() so ChatBot construction
+        # returns instantly. Until training completes, predict/continue
+        # fall back to the trigram backoff model automatically.
+
+    def fit_async(self):
+        """Train the transformer in a background daemon thread so the web
+        server / chat loop can start immediately. Falls back to the
+        trigram model until training completes."""
+        if self._fitted or self.backend != "transformer":
+            return
+        def _bg():
+            try:
+                self._fit()
+            except Exception:
+                self.backend = "trigram_backoff"
+                self.model = None
+            finally:
+                self._fitted = True
+        t = threading.Thread(target=_bg, daemon=True)
+        t.start()
 
     # ---- self-distillation + public-content training data -----------------
 
@@ -2997,7 +3016,7 @@ class TransformerLanguageModel:
         predict_next_words() (a list of (word, probability) pairs plus
         a source label) so callers/handlers don't need to know which
         backend answered."""
-        if self.backend != "transformer":
+        if self.backend != "transformer" or not self._fitted:
             return self.ngram_model.predict_next_words(text, top_k=top_k)
 
         tokens = ["<bos>"] + self.ngram_model._tokenize(text)
@@ -3039,7 +3058,7 @@ class TransformerLanguageModel:
         use, stopping early on a sampled <eos> exactly the way the
         trigram model stops on its own learned <end> token.
         """
-        if self.backend != "transformer":
+        if self.backend != "transformer" or not self._fitted:
             return self.ngram_model.continue_text(seed_text, max_words=max_words)
 
         tokens = ["<bos>"] + (self.ngram_model._tokenize(seed_text) if seed_text else [])
