@@ -43,7 +43,7 @@ function loadConversation() {
 function setTheme(dark) {
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
   themeToggle.setAttribute('aria-pressed', dark);
-  themeToggle.textContent = dark ? '&#9790;' : '&#9728;';
+  themeToggle.textContent = dark ? '🌙' : '☀️';
   try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch {}
 }
 
@@ -54,7 +54,7 @@ function initTheme() {
 }
 
 function renderMarkdown(text) {
-  const escapeHtml = (s) => s.replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>');
+  const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   let html = escapeHtml(text);
 
   html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>');
