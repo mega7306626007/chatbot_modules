@@ -3384,7 +3384,10 @@ WEB LOOKUP & BROWSING (need internet; fail closed if offline)
             "sw": "Nafurahi kuongea nawe tena,",
             "fr": "C'est bon de te reparler,",
         }[lang]
-        greeting = f"{base.rstrip('.')} {connector} {name}."
+        base = base.strip()
+        if not re.search(r"[.!?]$", base):
+            base += "."
+        greeting = f"{base} {connector} {name}."
         if not self._greeted:
             self._greeted = True
             part = self.clock.part_of_day()
