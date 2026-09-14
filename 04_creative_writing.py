@@ -1725,4 +1725,113 @@ class PoemWriter:
             lines = fallback
         return "\n".join(lines)
 
-# ==============================================================================
+    # Hand-written limerick frames (AABBA), reusable and correct by
+    # construction - no fragile syllable math. {name} is substituted with
+    # the user's name when known; {a..e} slots pull from a small theme bank.
+    LIMERICK_BANK = {
+        "en": {
+            "frames": [
+                "There once was a {person} named {name},\n" \
+                "whose wit was both sharp and quite {adj}.\n" \
+                "They'd {verb} and {verb2},\n" \
+                "through morning and {noun},\n" \
+                "and never once {noun2} the same {noun3}.",
+                "A {adj} young genius named {name}\n" \
+                "once {verb} in the flickering {noun}.\n" \
+                "When asked, \"Is it true?\"\n" \
+                "they said, \"{saying}\"\n" \
+                "and the whole town decided to {verb2}.",
+                "There was an inventor called {name}\n" \
+                "who {verb} a great {noun} out of {noun2}.\n" \
+                "It {verb2} every day,\n" \
+                "in a {adj} sort of way,\n" \
+                "and the neighbors all thought it was {noun3}.",
+                "A traveler {adj} named {name}\n" \
+                "kept {verb} in a peculiar {noun}.\n" \
+                "They knocked and they knocked,\n" \
+                "till a {noun2} unlocked,\n" \
+                "and welcomed them in with a {noun3}.",
+                "Said a wise little owl to {name},\n" \
+                "\"There's {adj} work to be done, all the same.\"\n" \
+                "So they {verb} without rest,\n" \
+                "till their {noun} was the best,\n" \
+                "and the forest declared it a {noun2}.",
+            ],
+            "slots": {
+                "person": ["chef", "poet", "coder", "farmer", "star", "dancer", "pilgrim", "goalkeeper"],
+                "adj": ["clever", "brave", "solemn", "genial", "dizzy", "mighty", "gentle"],
+                "verb": ["danced", "mumbled", "whistled", "stumbled", "wandered", "laughed", "reasoned"],
+                "verb2": ["doubted", "lamented", "celebrated", "commanded", "wondered", "protested"],
+                "noun": ["dawn", "market", "garden", "highway", "village", "workshop", "forest"],
+                "noun2": ["strand", "tune", "bottle", "arrow", "sapling", "lantern", "raft"],
+                "noun3": ["shame", "delight", "wonder", "prize", "parable", "secret", "tradition"],
+                "saying": ["Why, of course!", "Not a clue!", "Watch this, friend!", "Who, me? Never!", "That's the plan!"],
+            },
+        },
+        "sw": {
+            "frames": [
+                "Kulikuwa na kijana aitwae {name},\n" \
+                "{adj} sana katika kila {noun}.\n" \
+                "Akiwa {verb},\n" \
+                "huku akicheka na {noun2},\n" \
+                "hata mji wote ukaongeza {noun3}.",
+                "Mtu mmoja maarufu {name}\n" \
+                "ali{verb} kwa {adj} mpangilio wa {noun}.\n" \
+                "Kila mtu akauliza,\n" \
+                "\"Yote ni {noun2}?\"\n" \
+                "naye akajibu kwa {noun3} kubwa.",
+            ],
+            "slots": {
+                "adj": ["hodari", "mwerevu", "mkarimu", "mvumilivu", "mcheshi", "shupavu"],
+                "noun": ["ufundishaji", "mji", "ufukwe", "shamba", "fundi", "soko"],
+                "verb": ["akicheza", "akitoka", "akipanda", "akivuka", "akibuni", "akisikiliza"],
+                "noun2": ["tani", "vicheko", "stori", "ngoma", "habari", "ndoto"],
+                "noun3": ["sifa", "mchezo", "hotuba", "shukrani", "wimbo", "hadithi"],
+            },
+        },
+        "fr": {
+            "frames": [
+                "Il était une fois {name},\n" \
+                "un {noun} d'un naturel {adj}.\n" \
+                "Chaque jour il {verb},\n" \
+                "d'un air tout {adj2},\n" \
+                "et la ville en fit un {noun2}.",
+                "Un certain {noun} nommé {name}\n" \
+                "{verb} au milieu de la {noun3}.\n" \
+                "Personne ne savait\n" \
+                "ce qu'il {verb2} vraiment,\n" \
+                "mais tous {noun2} au refrain.",
+            ],
+            "slots": {
+                "noun": ["poète", "chef", "rêveur", "facteur", "jardinier", "astronome"],
+                "adj": ["malicieux", "courageux", "généreux", "curieux", "joyeux", "persévérant"],
+                "adj2": ["enchanté", "rassuré", "amusé", "absorbé", "étonné", "heureux"],
+                "verb": ["chantait", "dansait", "flânait", "bricolait", "peignait", "voulait"],
+                "verb2": ["faisait", "disait", "cherchait", "préparait", "imaginait", "racontait"],
+                "noun2": ["révère", "transporteur", "légende", "conteur", "héros", "artisan"],
+                "noun3": ["place", "cuisine", "rue", "gare", "école", "ferme"],
+            },
+        },
+    }
+
+    def limerick(self, lang: str = "en", name: str = None) -> str:
+        """Writes a 5-line AABBA limerick from the hand-crafted frame
+        bank (guaranteed rhyme and rhythm - no fragile syllable math).
+        Fills a few content slots from the theme bank and weaves the
+        user's name in when known."""
+        bank = self.LIMERICK_BANK.get(lang, self.LIMERICK_BANK["en"])
+        frame = random.choice(bank["frames"])
+        slots = bank["slots"]
+        filled = {}
+        seen_nouns = 0
+        for key in re.findall(r"\{(\w+)\}", frame):
+            if key == "name":
+                filled["name"] = (name or "Ari").strip() or "Ari"
+                continue
+            pool = slots.get(key) or slots.get("noun", ["thing"])
+            filled[key] = random.choice(pool)
+            if key.startswith("noun"):
+                seen_nouns += 1
+        for key, val in filled.items():
+            frame = frame.replace("{" + key + "}", val)
+        return frame

@@ -179,6 +179,17 @@ class FunExtras:
         ("Why did the scientific calculator never lie?", "It always gave you the real logarithm."),
         ("What do you call a spreadsheet that tells dad jokes?", "A cell-ebration of puns."),
         ("Why did the query optimizer get promoted?", "It always found the fastest path to the punchline."),
+        ("Why did the loaf of bread go to the bank?", "It wanted to make some dough."),
+        ("What do you call a shoe made out of a banana?", "A slipper."),
+        ("Why did the lion cover his face in the jungle?", "He didn't want to be spotted."),
+        ("What did the ocean say to the beach?", "Nothing, it just waved."),
+        ("Why was the broom late for work?", "It overswept."),
+        ("What does a cloud wear under its raincoat?", "Thunderwear."),
+        ("Why did the astronaut break up with the planet?", "There was no gravity between them."),
+        ("What's a vampire's favorite fruit?", "Neck-tarines."),
+        ("Why did the chicken cross the playground?", "To get to the other slide."),
+        ("What do you call a pig that does karate?", "A pork chop."),
+        ("Why did the firefly get bad grades?", "It just wasn't very bright."),
         ],
         "sw": [
             ("Kwa nini kompyuta ilikuwa baridi?", "Iliacha Windows (madirisha) yake wazi."),
@@ -609,6 +620,24 @@ class FunExtras:
              "choices": ["9", "10", "11", "12"], "answer": "11"},
             {"question": "What is the main gas found in Earth's atmosphere?",
              "choices": ["Oxygen", "Carbon Dioxide", "Nitrogen", "Hydrogen"], "answer": "nitrogen"},
+            {"question": "What is the largest organ in the human body?",
+             "choices": ["Heart", "Liver", "Skin", "Brain"], "answer": "skin"},
+            {"question": "Which metal is liquid at room temperature?",
+             "choices": ["Silver", "Mercury", "Zinc", "Copper"], "answer": "mercury"},
+            {"question": "What is the fastest bird in the world?",
+             "choices": ["Falcon (peregrine)", "Eagle", "Swift", "Albatross"], "answer": "falcon (peregrine)"},
+            {"question": "How many hearts does an octopus have?",
+             "choices": ["1", "2", "3", "4"], "answer": "3"},
+            {"question": "In which year did humans first land on the Moon?",
+             "choices": ["1965", "1969", "1972", "1981"], "answer": "1969"},
+            {"question": "What is the world's most spoken language by total speakers?",
+             "choices": ["English", "Spanish", "Mandarin Chinese", "Hindi"], "answer": "english"},
+            {"question": "What is the smallest bone in the human body?",
+             "choices": ["Finger bone", "Stapes (in the ear)", "Rib", "Toe bone"], "answer": "stapes (in the ear)"},
+            {"question": "Which planet in our solar system has the shortest day?",
+             "choices": ["Earth", "Mars", "Saturn", "Jupiter"], "answer": "jupiter"},
+            {"question": "What natural phenomenon is measured by the Richter scale?",
+             "choices": ["Wind speed", "Tornadoes", "Earthquakes", "Volcanoes"], "answer": "earthquakes"},
         
         ],
         "sw": [
@@ -817,22 +846,56 @@ class FunExtras:
         ],
     }
 
+    _JOKE_OPENERS = {
+        "en": ["Here's one for you:", "Okay, get ready...", "Why not? Let's go:", "Alright, listen closely:", "I've got a good one:"],
+        "sw": ["Hii ni kwa ajili yako:", "Sawa, jitayarishe...", "Kwa nini isiwe? Hebu basi:", "Sawa, sikiliza kwa makini:", "Nayo nzuri hii:"],
+        "fr": ["En voici une pour toi :", "D'accord, prépare-toi...", "Pourquoi pas ? Allons-y :", "Bon, écoute bien :", "J'en ai une bonne :"],
+    }
+    _QUOTE_OPENERS = {
+        "en": ["A thought to carry with you:", "Here's something worth pondering:", "One to remember:", "Words to live by:"],
+        "sw": ["Wazo la kukumbuka:", "Hili ni la kufikiria:", "Hili ni la kukumbuka:", "Maneno ya kuishi nayo:"],
+        "fr": ["Une pensée à garder avec toi :", "Voici de quoi méditer :", "Une à retenir :", "Des mots pour vivre :"],
+    }
+
     def __init__(self):
         self._last_riddle_answer = None
         self._last_trivia = None
+        self._last_joke = None
+        self._last_quote = None
+        self._last_riddle = None
+        self._last_trivia_q = None
+
+    def _pick_avoiding(self, pool, last_key):
+        """Pick a random item, avoiding the most recent pick (if pool allows)."""
+        if len(pool) > 1 and last_key is not None:
+            alternatives = [i for i in pool if i != last_key]
+            choice = random.choice(alternatives)
+        else:
+            choice = random.choice(pool)
+        return choice
 
     def random_joke(self, lang: str = "en") -> str:
         pool = self.JOKES.get(lang) or self.JOKES["en"]
-        setup, punchline = random.choice(pool)
-        return f"{setup}\n...{punchline}"
+        setup, punchline = self._pick_avoiding(pool, self._last_joke)
+        self._last_joke = (setup, punchline)
+        opener = random.choice(
+            self._JOKE_OPENERS.get(lang) or self._JOKE_OPENERS["en"]
+        )
+        return f"{opener}\n{setup}\n...{punchline}"
 
-    def random_quote(self) -> str:
-        text, author = random.choice(self.QUOTES)
-        return f'"{text}"\n— {author}'
+    def random_quote(self, lang: str = "en") -> str:
+        quote = self._pick_avoiding(self.QUOTES, self._last_quote)
+        self._last_quote = quote
+        text, author = quote
+        opener = random.choice(
+            self._QUOTE_OPENERS.get(lang) or self._QUOTE_OPENERS["en"]
+        )
+        return f'{opener}\n"{text}"\n— {author}'
 
     def random_riddle(self) -> str:
-        riddle, answer = random.choice(self.RIDDLES)
+        riddle, answer = self._pick_avoiding(self.RIDDLES, self._last_riddle)
         self._last_riddle_answer = answer
+        self._last_riddle = (riddle, answer)
         return riddle
 
     def reveal_riddle_answer(self) -> str:
@@ -856,8 +919,9 @@ class FunExtras:
 
     def random_trivia(self, lang: str = "en") -> str:
         pool = self.TRIVIA.get(lang) or self.TRIVIA["en"]
-        item = random.choice(pool)
+        item = self._pick_avoiding(pool, self._last_trivia_q)
         self._last_trivia = item
+        self._last_trivia_q = item
         lines = [item["question"]]
         letters = ["A", "B", "C", "D"]
         for letter, choice in zip(letters, item["choices"]):

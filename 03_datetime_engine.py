@@ -56,6 +56,20 @@ class DateTimeEngine:
         now = self.now()
         return now.strftime("%I:%M %p").lstrip("0")
 
+    @staticmethod
+    def part_of_day() -> str:
+        """Returns 'morning', 'afternoon', 'evening', or 'night'
+        based on the local current hour, so greetings can be
+        time-of-day aware."""
+        hour = DateTimeEngine.now().hour
+        if 5 <= hour < 12:
+            return "morning"
+        if 12 <= hour < 17:
+            return "afternoon"
+        if 17 <= hour < 21:
+            return "evening"
+        return "night"
+
     def current_date_str(self) -> str:
         now = self.now()
         weekday = self.WEEKDAY_NAMES[now.weekday()]

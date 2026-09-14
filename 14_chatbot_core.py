@@ -104,6 +104,7 @@ class ChatBot:
         "tell_story": "stories",
         "write_haiku": "haiku",
         "write_poem_general": "poetry",
+        "write_limerick": "limericks",
         "remember_fact": "things you've asked me to remember",
         "current_time": "the time",
         "current_date": "the date",
@@ -345,6 +346,10 @@ class ChatBot:
         # respond()'s META_COMMAND_NAMES check).
         self.previous_user_message = None
         self._current_raw_text = None
+        # Set to True once the first greeting of this session is handled,
+        # so the greeting can lead with a time-of-day opener only once
+        # (good morning / good afternoon / ... ) instead of every time.
+        self._greeted = False
         # Tracks the most recent (label, confidence) sentiment reading,
         # for tone-adapted responses and the 'compare models' command.
         self.last_sentiment = None
@@ -1109,6 +1114,11 @@ class ChatBot:
             [r"\b(write|make|create) (me )?a poem\s*(about|on|for)?\s*(.*)", r"\bwrite (some )?poetry\b"],
             self._handle_write_poem_general,
         )
+        e.register(
+            "write_limerick",
+            [r"\b(write|make|create|tell) (me )?a limerick\s*(about|on|for)?\s*(.*)"],
+            self._handle_write_limerick,
+        )
 
         # --- Math ---
         e.register("simple_math", [r"^\s*what('?s| is)\s+(.+?)\??\s*$", r"^\s*calculate\s+(.+)", r"^\s*compute\s+(.+)"], self._handle_simple_math)
@@ -1745,6 +1755,11 @@ class ChatBot:
         label = f" about {topic}" if topic and topic_key != "general" else ""
         return f"Here's a poem{label}:\n\n{poem}"
 
+    def _handle_write_limerick(self, text, m):
+        lang = self.language_detector.detect(text)
+        poem = self.poet.limerick(lang=lang, name=self.user_name())
+        return f"Here's a limerick:\n\n{poem}"
+
     def _handle_simple_math(self, text, m):
         """
         Extremely rigid arithmetic handler: only recognizes patterns like
@@ -1974,11 +1989,18 @@ class ChatBot:
         return self.fun.random_joke(lang)
 
     def _handle_tell_quote(self, text, m):
-        return self.fun.random_quote()
+        lang = self.language_detector.detect(text)
+        return self.fun.random_quote(lang)
 
     def _handle_tell_riddle(self, text, m):
+        lang = self.language_detector.detect(text)
         riddle = self.fun.random_riddle()
-        return f"{riddle}\n\n(Try to answer it, or say 'reveal the riddle answer' if you're stuck.)"
+        follow = {
+            "en": "Try to answer it, or say 'reveal the riddle answer' if you're stuck.",
+            "sw": "Jaribu kujibu, au sema 'reveal the riddle answer' ukiwa umekwama.",
+            "fr": "Essaie de répondre, ou dis « reveal the riddle answer » si tu es bloqué.",
+        }[lang]
+        return f"{riddle}\n\n({follow})"
 
     def _handle_riddle_answer(self, text, m):
         return self.fun.reveal_riddle_answer()
@@ -1986,7 +2008,12 @@ class ChatBot:
     def _handle_tell_trivia(self, text, m):
         lang = self.language_detector.detect(text)
         trivia = self.fun.random_trivia(lang)
-        return f"{trivia}\n\n(Answer with the letter or the full answer.)"
+        follow = {
+            "en": "Answer with the letter or the full answer.",
+            "sw": "Jibu kwa herufi au kwa jibu kamili.",
+            "fr": "Réponds avec la lettre ou la réponse complète.",
+        }[lang]
+        return f"{trivia}\n\n({follow})"
 
     # ---- text tools handlers ---------------------------------------------
 
@@ -2238,6 +2265,7 @@ class ChatBot:
             ("quote", "quote"),
             ("story", "story"),
             ("poem", "poem"),
+            ("limerick", "poem"),
             ("fun fact", "fun_fact_topic"),
             ("fact", "fun_fact_topic"),
             ("coin flip", "COIN"),
@@ -2264,7 +2292,7 @@ class ChatBot:
             "tell_trivia": "trivia", "trivia": "trivia",
             "tell_story": "story", "story": "story",
             "write_poem_general": "poem", "write_haiku": "poem",
-            "write_acrostic": "poem", "poem": "poem",
+            "write_acrostic": "poem", "write_limerick": "poem", "poem": "poem",
             "fun_fact_topic": "fun_fact_topic",
             "flip_coin": "COIN",
             "roll_dice": "DICE",
@@ -3356,7 +3384,22 @@ WEB LOOKUP & BROWSING (need internet; fail closed if offline)
             "sw": "Nafurahi kuongea nawe tena,",
             "fr": "C'est bon de te reparler,",
         }[lang]
-        return f"{base.rstrip('.')} {connector} {name}."
+        greeting = f"{base.rstrip('.')} {connector} {name}."
+        if not self._greeted:
+            self._greeted = True
+            part = self.clock.part_of_day()
+            time_opener = {
+                "en": {"morning": "Good morning", "afternoon": "Good afternoon",
+                       "evening": "Good evening", "night": "Hello"},
+                "sw": {"morning": "Habari za asubuhi", "afternoon": "Habari za mchana",
+                       "evening": "Habari za jioni", "night": "Habari za usiku"},
+                "fr": {"morning": "Bonjour", "afternoon": "Bon après-midi",
+                       "evening": "Bonsoir", "night": "Bonne nuit"},
+            }[lang][part]
+            if part in ("morning", "afternoon", "evening"):
+                return f"{time_opener}, {name}! {greeting}"
+            return greeting
+        return greeting
 
     def _handle_farewell(self, text, m):
         lang = self.language_detector.detect(text)
@@ -5366,6 +5409,7 @@ ChatBot._NN_AUTO_DISPATCH_LABELS = {
     "tell_quote": ChatBot._handle_tell_quote,
     "tell_riddle": ChatBot._handle_tell_riddle,
     "tell_trivia": ChatBot._handle_tell_trivia,
+    "write_limerick": ChatBot._handle_write_limerick,
     "todo_list": ChatBot._handle_todo_list,
     "hangman_start": ChatBot._handle_hangman_start,
     "help": ChatBot._handle_help,
