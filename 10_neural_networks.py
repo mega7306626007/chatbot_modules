@@ -394,6 +394,14 @@ NN_INTENT_EXAMPLES = [
     ("can you write a poem about the stars", "write_poem_general"),
     ("write a short poem about hope", "write_poem_general"),
 
+    # --- write_limerick ---
+    ("write a limerick about a traveller", "write_limerick"),
+    ("write me a limerick", "write_limerick"),
+    ("can you compose a limerick", "write_limerick"),
+    ("make a funny limerick for me", "write_limerick"),
+    ("write a limerick about a chef", "write_limerick"),
+    ("tell me a limerick", "write_limerick"),
+
     # --- simple_math ---
     ("what is 12 times 4", "simple_math"),
     ("calculate 9 plus 7", "simple_math"),
